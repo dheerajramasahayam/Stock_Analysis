@@ -1,6 +1,7 @@
 [Unit]
 Description=Gunicorn instance to serve Stock Analyzer Flask app
-After=network.target # Ensure network is up
+# Ensure network is up before starting
+After=network.target
 
 [Service]
 # IMPORTANT: Replace 'hasher' if your user is different

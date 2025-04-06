@@ -64,13 +64,15 @@ pip install -r requirements.txt || exit 1
 deactivate # Deactivate after installing
 
 # --- Database Initialization (Run only if DB doesn't exist) ---
+# --- Database Initialization (Run only if DB doesn't exist) ---
+# Note: Assumes the .env file is loaded for these script runs too
 if [ ! -f "stocks.db" ]; then
     echo "Initializing database..."
-    $VENV_DIR/bin/python backend/database.py || exit 1
+    $VENV_DIR/bin/python backend/database.py || exit 1 # This path is relative to APP_DIR, still okay
     echo "Running initial data fetch (this may take a long time)..."
-    $VENV_DIR/bin/python backend/data_fetcher.py || exit 1 # Run fetcher only on first setup
+    $VENV_DIR/bin/python backend/data_fetcher.py || exit 1 # This path is relative to APP_DIR, still okay
     echo "Running initial scoring..."
-    $VENV_DIR/bin/python backend/scorer.py || exit 1 # Run scorer only on first setup
+    $VENV_DIR/bin/python backend/scorer.py || exit 1 # This path is relative to APP_DIR, still okay
 else
     echo "Database already exists, skipping initialization and initial data fetch/score."
     # Optional: Run database migrations/updates if needed in the future

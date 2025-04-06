@@ -16,6 +16,16 @@ VENV_DIR="backend/venv"
 echo "--- Starting Deployment ---"
 date
 
+# --- Source .env file if it exists ---
+if [ -f ".env" ]; then
+    echo "Loading environment variables from .env file..."
+    set -o allexport # Export all variables defined in the sourced file
+    source .env
+    set +o allexport # Stop exporting variables
+else
+    echo "INFO: .env file not found, relying on system environment variables."
+fi
+
 # --- Check for required environment variables ---
 if [ -z "$GEMINI_API_KEY" ]; then
     echo "ERROR: GEMINI_API_KEY environment variable is not set. Exiting."

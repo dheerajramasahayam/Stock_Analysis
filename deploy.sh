@@ -5,7 +5,7 @@
 # --- Configuration ---
 APP_DIR="/home/hasher/Stocks_Analysis" # IMPORTANT: Change this to the actual deployment path on your server
 GIT_REPO="https://github.com/dheerajramasahayam/Stock_Analysis.git" # IMPORTANT: Change this to your Git repo URL (e.g., git@github.com:user/repo.git)
-PYTHON_VERSION="python3.12" # Or python3, adjust if needed
+PYTHON_VERSION="python3" # Or python3, adjust if needed
 VENV_DIR="backend/venv"
 
 # --- Environment Variables (Set these on your server!) ---

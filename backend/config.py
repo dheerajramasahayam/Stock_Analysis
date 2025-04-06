@@ -3,7 +3,7 @@ import os # Import os module
 # Configuration settings for the Stock Analyzer application
 
 # --- API Keys ---
-# Read from environment variables. These MUST be set in the environment for the app to work.
+# Read from environment variables. These MUST be set in the environment (e.g., via .env file) for the app to work.
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 BRAVE_API_KEY = os.getenv('BRAVE_API_KEY')
 
@@ -48,6 +48,13 @@ DIV_YIELD_PTS = 1
 MA_PERIOD = 50
 MA_PRICE_ABOVE_PTS = 1
 MA_PRICE_BELOW_PTS = -1
+
+# RSI (Relative Strength Index)
+RSI_PERIOD = 14
+RSI_OVERSOLD_THRESHOLD = 30 # Below this is considered oversold (potential buy signal)
+RSI_OVERBOUGHT_THRESHOLD = 70 # Above this is considered overbought (potential sell signal)
+RSI_OVERSOLD_PTS = 1
+RSI_OVERBOUGHT_PTS = -1
 
 # --- Portfolio ---
 PORTFOLIO_SELL_SCORE_THRESHOLD = -1 # Suggest selling if score drops below this

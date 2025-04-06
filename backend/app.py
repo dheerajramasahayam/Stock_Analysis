@@ -1,4 +1,11 @@
 from flask import Flask, jsonify, render_template, request
+from dotenv import load_dotenv # Import load_dotenv
+import os
+
+# Load environment variables from .env file BEFORE importing other modules that need them
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env') # Path to .env in root
+load_dotenv(dotenv_path=dotenv_path)
+
 import database
 from datetime import datetime, timedelta
 
@@ -43,7 +50,8 @@ def get_highlighted_stocks():
                 ds.avg_sentiment,
                 ds.pe_ratio,
                 ds.dividend_yield,
-                ds.price_vs_ma50 -- Add MA status column
+                ds.price_vs_ma50, -- Add MA status column
+                ds.rsi -- Add RSI column
             FROM daily_scores ds
             JOIN companies c ON ds.ticker = c.ticker
             WHERE ds.date = ?

@@ -69,6 +69,7 @@ def init_db():
             pe_ratio REAL, -- Add P/E ratio
             dividend_yield REAL, -- Add Dividend Yield
             price_vs_ma50 TEXT, -- Add MA comparison ('above', 'below', 'N/A')
+            rsi REAL, -- Add RSI value
             PRIMARY KEY (ticker, date),
             FOREIGN KEY (ticker) REFERENCES companies (ticker)
         )
@@ -127,6 +128,15 @@ def init_db():
     except sqlite3.OperationalError as e:
         if "duplicate column name" in str(e):
             print("price_vs_ma50 column already exists.")
+        else: raise e
+
+    # --- Add rsi column if it doesn't exist ---
+    try:
+        cursor.execute("ALTER TABLE daily_scores ADD COLUMN rsi REAL")
+        print("Added rsi column to daily_scores table.")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            print("rsi column already exists.")
         else: raise e
 
     conn.commit()

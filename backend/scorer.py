@@ -1,7 +1,16 @@
 import sqlite3
+from dotenv import load_dotenv # Import load_dotenv
+import os
+import sys
+
+# Load environment variables from .env file BEFORE importing other modules that need them
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env') # Path to .env in root
+load_dotenv(dotenv_path=dotenv_path)
+
 import database # To use get_db_connection
 from datetime import datetime, timedelta
 import pandas as pd # Using pandas for easier calculations
+import pandas_ta as ta # Import pandas-ta
 import config # Import the config file
 
 def calculate_scores_for_date(target_date_str):
@@ -38,6 +47,7 @@ def calculate_scores_for_date(target_date_str):
         pe_ratio = None
         dividend_yield = None
         price_vs_ma50_status = 'N/A' # Initialize MA status
+        rsi_value = None # Initialize RSI value
 
         # --- Fetch Fundamental Data (P/E, Dividend Yield) ---
         # We need to fetch this fresh as it's not stored in price_history
@@ -155,8 +165,31 @@ def calculate_scores_for_date(target_date_str):
                  print(f"  Not enough data for {config.MA_PERIOD}-day SMA for {ticker}.")
                  price_vs_ma50_status = 'N/A' # Keep as N/A
 
+            # 4. Calculate RSI
+            if len(df) >= config.RSI_PERIOD + 1: # Need enough data points for RSI calc
+                # Ensure the index is datetime for pandas_ta
+                if not pd.api.types.is_datetime64_any_dtype(df.index):
+                     df.index = pd.to_datetime(df.index)
+                # Calculate RSI
+                df.ta.rsi(length=config.RSI_PERIOD, append=True) # Appends column like 'RSI_14'
+                rsi_col_name = f'RSI_{config.RSI_PERIOD}'
+                if rsi_col_name in df.columns and not pd.isna(df[rsi_col_name].iloc[-1]):
+                    rsi_value = df[rsi_col_name].iloc[-1]
+                    # Score RSI
+                    if rsi_value < config.RSI_OVERSOLD_THRESHOLD:
+                        score += config.RSI_OVERSOLD_PTS
+                    elif rsi_value > config.RSI_OVERBOUGHT_THRESHOLD:
+                        score += config.RSI_OVERBOUGHT_PTS
+                    # No points for neutral RSI
+                else:
+                    print(f"  RSI calculation failed or resulted in NaN for {ticker}.")
+                    rsi_value = None # Ensure it's None if calc failed
+            else:
+                print(f"  Not enough data for {config.RSI_PERIOD}-day RSI for {ticker}.")
+                rsi_value = None
+
         else:
-            print(f"  Not enough price history data for {ticker} to calculate momentum/volume/MA.")
+            print(f"  Not enough price history data for {ticker} to calculate momentum/volume/MA/RSI.")
             # Assign neutral scores if not enough data
             score += config.PRICE_NEUTRAL_PTS # Use config
             score += config.VOLUME_NORMAL_PTS # Use config
@@ -173,7 +206,7 @@ def calculate_scores_for_date(target_date_str):
         else:
             score += config.PE_NEUTRAL_PTS_PE # Use config
 
-        # 4. Score Dividend Yield
+        # 5. Score Dividend Yield
         if dividend_yield is not None and dividend_yield > config.DIV_YIELD_THRESHOLD: # Use config
             score += config.DIV_YIELD_PTS # Use config
         # No points added or subtracted otherwise for dividend yield
@@ -189,16 +222,17 @@ def calculate_scores_for_date(target_date_str):
             gemini_sentiment, # Store gemini sentiment
             pe_ratio, # Store P/E
             dividend_yield, # Store Div Yield
-            price_vs_ma50_status # Store MA status
+            price_vs_ma50_status, # Store MA status
+            rsi_value # Store RSI value
         ))
 
     # Insert all calculated scores into the database
     try:
         cursor.executemany("""
             INSERT OR REPLACE INTO daily_scores
-            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, all_scores) # Added price_vs_ma50
+            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, all_scores) # Added rsi
         conn.commit()
         print(f"Successfully calculated and stored scores for {len(all_scores)} tickers.")
     except Exception as e:

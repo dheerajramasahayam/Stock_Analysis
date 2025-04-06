@@ -1,11 +1,6 @@
 from flask import Flask, jsonify, render_template, request
-from dotenv import load_dotenv # Import load_dotenv
+# Removed dotenv imports, as config.py now handles it
 import os
-
-# Load environment variables from .env file BEFORE importing other modules that need them
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env') # Path to .env in root
-load_dotenv(dotenv_path=dotenv_path)
-
 import database
 from datetime import datetime, timedelta
 

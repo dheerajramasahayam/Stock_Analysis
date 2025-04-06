@@ -3,13 +3,8 @@ import time
 import subprocess
 import sys
 from datetime import datetime, timedelta
-from dotenv import load_dotenv # Import load_dotenv
+# Removed dotenv imports, as config.py now handles it
 import os
-
-# Load environment variables from .env file BEFORE importing other modules that need them
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env') # Path to .env in root
-load_dotenv(dotenv_path=dotenv_path)
-
 import config # Import the config file
 
 # --- Configuration ---

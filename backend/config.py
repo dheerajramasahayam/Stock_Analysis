@@ -1,9 +1,14 @@
-import os # Import os module
+import os
+from dotenv import load_dotenv
+
+# Load .env file from project root
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 # Configuration settings for the Stock Analyzer application
 
 # --- API Keys ---
-# Read from environment variables. These MUST be set in the environment (e.g., via .env file) for the app to work.
+# Read from environment variables (loaded from .env by load_dotenv above)
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 BRAVE_API_KEY = os.getenv('BRAVE_API_KEY')
 

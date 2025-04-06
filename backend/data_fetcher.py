@@ -7,12 +7,7 @@ import gemini_analyzer # Import the new module
 from datetime import datetime, timedelta, date # Add date import
 import time
 import os
-from dotenv import load_dotenv # Import load_dotenv
-
-# Load environment variables from .env file BEFORE importing other modules that need them
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env') # Path to .env in root
-load_dotenv(dotenv_path=dotenv_path)
-
+# Removed dotenv imports, as config.py now handles it
 import config # Import the config file
 
 # sentiment_analyzer = SentimentIntensityAnalyzer() # No longer needed
@@ -22,11 +17,7 @@ def load_tickers_from_file(filename=config.TICKER_LIST_FILE): # Use config
     try:
         with open(filename, 'r') as f:
             tickers = [line.strip() for line in f if line.strip()]
-        # --- Limit tickers for testing ---
-        limit = 15
-        tickers = tickers[:limit]
-        print(f"Loaded {len(tickers)} tickers from {filename} (Limited to {limit} for testing)")
-        # ---------------------------------
+        print(f"Loaded {len(tickers)} tickers from {filename}")
         return tickers
     except FileNotFoundError:
         print(f"Error: Ticker file not found at {filename}", file=sys.stderr)

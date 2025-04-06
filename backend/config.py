@@ -15,6 +15,7 @@ else:
 # Read from environment variables (loaded from .env by load_dotenv above)
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 BRAVE_API_KEY = os.getenv('BRAVE_API_KEY')
+GEMINI_MODEL_NAME = os.getenv('GEMINI_MODEL_NAME', 'gemini-1.5-flash-latest') # Default if not set
 
 # --- Data Fetching ---
 TICKER_LIST_FILE = "backend/sp600_tickers.txt"

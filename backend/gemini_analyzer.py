@@ -18,10 +18,11 @@ if not config.BRAVE_API_KEY:
 # Configure Gemini
 try:
     genai.configure(api_key=config.GEMINI_API_KEY)
-    # Using gemini-1.5-flash as it's fast and capable for this task
-    query_generation_model = genai.GenerativeModel('gemini-1.5-flash-latest')
-    analysis_model = genai.GenerativeModel('gemini-1.5-flash-latest')
-    print("Gemini models initialized.")
+    # Use the model name specified in the config (read from environment)
+    model_name = config.GEMINI_MODEL_NAME
+    query_generation_model = genai.GenerativeModel(model_name)
+    analysis_model = genai.GenerativeModel(model_name)
+    print(f"Gemini models initialized with: {model_name}")
 except Exception as e:
     print(f"Error configuring Gemini: {e}")
     query_generation_model = None
@@ -147,12 +148,34 @@ def get_analysis_for_stock(ticker, company_name):
     if not search_queries:
         return {"summary": "Failed to generate search queries.", "sentiment_score": 0.0}
 
-    # Use the first generated query for the search
-    # Could potentially iterate or combine results from multiple queries later
-    search_results = search_with_brave(search_queries[0])
-    time.sleep(1) # Avoid hitting Brave API rate limits too quickly
+    # Search for each query and collect results
+    all_search_results = []
+    max_results_per_query = 2 # Limit results from each query to keep context manageable
+    for i, query in enumerate(search_queries):
+        if i > 0: # Add delay between Brave API calls
+            time.sleep(1)
+        results = search_with_brave(query)
+        if results:
+            all_search_results.extend(results[:max_results_per_query])
 
-    analysis = analyze_search_results(ticker, company_name, search_results)
+    # Remove potential duplicate URLs before analysis
+    seen_urls = set()
+    unique_results = []
+    for result in all_search_results:
+        url = result.get('url')
+        if url and url not in seen_urls:
+            unique_results.append(result)
+            seen_urls.add(url)
+
+    # Use logging module if available, otherwise print
+    try:
+        import logging
+        logging.info(f"Collected {len(unique_results)} unique search results from {len(search_queries)} queries for {ticker}.")
+    except ImportError:
+        print(f"INFO: Collected {len(unique_results)} unique search results from {len(search_queries)} queries for {ticker}.")
+
+
+    analysis = analyze_search_results(ticker, company_name, unique_results) # Pass unique results
     print(f"--- Finished Gemini analysis for {ticker} ---")
     return analysis
 

@@ -107,15 +107,14 @@ def get_stock_details(ticker):
         ]
 
         # Get the latest Gemini analysis summary and score
-        # Assumes one analysis record per ticker per day, identified by published_date
-        latest_analysis_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d') # Or get MAX(date) from daily_scores
+        # Get the most recent Gemini analysis summary and score available for the ticker
         cursor.execute("""
             SELECT gemini_summary, sentiment_score
             FROM news_articles
-            WHERE ticker = ? AND published_date = ?
-            ORDER BY fetched_date DESC
+            WHERE ticker = ?
+            ORDER BY published_date DESC, fetched_date DESC
             LIMIT 1
-        """, (ticker, latest_analysis_date))
+        """, (ticker,))
         analysis_row = cursor.fetchone()
         if analysis_row:
             details['gemini_summary'] = analysis_row['gemini_summary']

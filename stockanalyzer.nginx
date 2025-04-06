@@ -1,0 +1,46 @@
+# Nginx configuration for Stock Analyzer
+
+server {
+    listen 80; # Listen on port 80 for HTTP requests
+    # Replace example.com with your actual domain name or server's IP address
+    server_name example.com www.example.com your_server_ip;
+
+    # Optional: Redirect HTTP to HTTPS (uncomment if you set up SSL)
+    # listen 443 ssl;
+    # ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem; # Path to your SSL cert
+    # ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem; # Path to your SSL key
+    # include /etc/letsencrypt/options-ssl-nginx.conf; # Recommended SSL options
+    # ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # Diffie-Hellman parameters
+    #
+    # if ($scheme != "https") {
+    #     return 301 https://$host$request_uri;
+    # }
+
+    # Root location for handling requests to the application
+    location / {
+        # Include standard proxy headers
+        include proxy_params;
+
+        # Proxy requests to the Gunicorn Unix socket
+        # IMPORTANT: Ensure this path matches the --bind path in stockapp-web.service
+        proxy_pass http://unix:/home/hasher/Stock_Analysis/stockapp.sock;
+
+        # Optional: Increase proxy timeouts if needed for long requests
+        # proxy_connect_timeout       600;
+        # proxy_send_timeout          600;
+        # proxy_read_timeout          600;
+        # send_timeout                600;
+    }
+
+    # Optional: Configure Nginx to serve static files directly for better performance
+    # location /static {
+    #     # IMPORTANT: Set the correct path to your static files
+    #     alias /home/hasher/Stock_Analysis/frontend/static;
+    #     expires 1d; # Cache static files for 1 day
+    #     access_log off;
+    # }
+
+    # Optional: Add access and error logs
+    # access_log /var/log/nginx/stockanalyzer.access.log;
+    # error_log /var/log/nginx/stockanalyzer.error.log;
+}

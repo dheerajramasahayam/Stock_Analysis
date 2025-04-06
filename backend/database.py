@@ -1,6 +1,9 @@
 import sqlite3
+import os
 
-DATABASE_NAME = 'stocks.db'
+# Define database path relative to the project root (one level up from backend)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATABASE_NAME = os.path.join(PROJECT_ROOT, 'stocks.db')
 
 def get_db_connection():
     """Establishes a connection to the SQLite database."""

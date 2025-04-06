@@ -1,7 +1,6 @@
 [Unit]
 Description=Gunicorn instance to serve Stock Analyzer Flask app
-# Ensure network is up before starting
-After=network.target
+After=network.target # Ensure network is up
 
 [Service]
 # IMPORTANT: Replace 'hasher' if your user is different
@@ -13,8 +12,8 @@ WorkingDirectory=/home/hasher/Stock_Analysis/backend
 EnvironmentFile=/home/hasher/Stock_Analysis/.env
 # Set PYTHONPATH so imports work when run from backend dir
 # Execute gunicorn using its full path (adjust if 'which gunicorn' shows different path)
-# Bind to localhost TCP port
-ExecStart=/bin/bash -c 'cd /home/hasher/Stock_Analysis/backend && PYTHONPATH=/home/hasher/Stock_Analysis/backend /home/hasher/.local/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 app:app'
+# Bind to ALL interfaces TCP port for debugging (Nginx still proxies to 127.0.0.1)
+ExecStart=/bin/bash -c 'cd /home/hasher/Stock_Analysis/backend && PYTHONPATH=/home/hasher/Stock_Analysis/backend /home/hasher/.local/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 app:app'
 Restart=always
 RestartSec=5s
 

@@ -65,6 +65,15 @@ RSI_OVERBOUGHT_THRESHOLD = 70 # Above this is considered overbought (potential s
 RSI_OVERSOLD_PTS = 1
 RSI_OVERBOUGHT_PTS = -1
 
+# --- Scoring Weights (Adjust to prioritize factors) ---
+WEIGHT_SENTIMENT = 1.0
+WEIGHT_MOMENTUM = 1.0
+WEIGHT_VOLUME = 1.0
+WEIGHT_PE_RATIO = 1.0
+WEIGHT_DIVIDEND = 1.0
+WEIGHT_MA50 = 1.0
+WEIGHT_RSI = 1.0
+
 # --- Portfolio ---
 PORTFOLIO_SELL_SCORE_THRESHOLD = -1 # Suggest selling if score drops below this
 

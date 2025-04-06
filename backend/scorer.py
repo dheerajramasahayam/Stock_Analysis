@@ -105,8 +105,8 @@ def calculate_scores_for_date(target_date_str):
              sentiment_pts = config.SENTIMENT_NEGATIVE_PTS
         else:
             sentiment_pts = config.SENTIMENT_NEUTRAL_PTS
-        score += sentiment_pts
-        score_details['sentiment'] = {'value': gemini_sentiment, 'pts': sentiment_pts}
+        score += sentiment_pts * config.WEIGHT_SENTIMENT # Apply weight
+        score_details['sentiment'] = {'value': gemini_sentiment, 'pts': sentiment_pts, 'weighted_pts': sentiment_pts * config.WEIGHT_SENTIMENT}
 
         # 2. Calculate Price Momentum & Volume Ratio (Keep this logic)
         cursor.execute("""
@@ -139,12 +139,12 @@ def calculate_scores_for_date(target_date_str):
                         momentum_pts = config.PRICE_NEUTRAL_PTS # Use config
                 else:
                     momentum_pts = config.PRICE_NEUTRAL_PTS # Use config
-                score += momentum_pts
-                score_details['momentum'] = {'value': price_change_pct, 'pts': momentum_pts}
+                score += momentum_pts * config.WEIGHT_MOMENTUM # Apply weight
+                score_details['momentum'] = {'value': price_change_pct, 'pts': momentum_pts, 'weighted_pts': momentum_pts * config.WEIGHT_MOMENTUM}
             else:
                  momentum_pts = config.PRICE_NEUTRAL_PTS # Use config
-                 score += momentum_pts
-                 score_details['momentum'] = {'value': None, 'pts': momentum_pts}
+                 score += momentum_pts * config.WEIGHT_MOMENTUM # Apply weight
+                 score_details['momentum'] = {'value': None, 'pts': momentum_pts, 'weighted_pts': momentum_pts * config.WEIGHT_MOMENTUM}
 
 
             # Volume Ratio
@@ -160,12 +160,12 @@ def calculate_scores_for_date(target_date_str):
                         volume_pts = config.VOLUME_NORMAL_PTS # Use config
                 else:
                     volume_pts = config.VOLUME_NORMAL_PTS # Use config
-                score += volume_pts
-                score_details['volume'] = {'value': volume_ratio, 'pts': volume_pts}
+                score += volume_pts * config.WEIGHT_VOLUME # Apply weight
+                score_details['volume'] = {'value': volume_ratio, 'pts': volume_pts, 'weighted_pts': volume_pts * config.WEIGHT_VOLUME}
             else:
                 volume_pts = config.VOLUME_NORMAL_PTS # Use config
-                score += volume_pts
-                score_details['volume'] = {'value': None, 'pts': volume_pts}
+                score += volume_pts * config.WEIGHT_VOLUME # Apply weight
+                score_details['volume'] = {'value': None, 'pts': volume_pts, 'weighted_pts': volume_pts * config.WEIGHT_VOLUME}
 
             # 3. Calculate 50-day SMA and compare
             if len(df) >= config.MA_PERIOD:
@@ -181,15 +181,15 @@ def calculate_scores_for_date(target_date_str):
                         ma_pts = config.MA_PRICE_BELOW_PTS
                         price_vs_ma50_status = 'below'
                     # No points if exactly equal
-                    score += ma_pts
+                    score += ma_pts * config.WEIGHT_MA50 # Apply weight
                 else:
                     logging.warning(f"SMA calculation resulted in NaN for {ticker}.")
                     price_vs_ma50_status = 'N/A' # Keep as N/A if SMA is NaN
-                score_details['ma50'] = {'value': price_vs_ma50_status, 'pts': ma_pts}
+                score_details['ma50'] = {'value': price_vs_ma50_status, 'pts': ma_pts, 'weighted_pts': ma_pts * config.WEIGHT_MA50}
             else:
                  logging.warning(f"Not enough data for {config.MA_PERIOD}-day SMA for {ticker}.")
                  price_vs_ma50_status = 'N/A' # Keep as N/A
-                 score_details['ma50'] = {'value': price_vs_ma50_status, 'pts': 0}
+                 score_details['ma50'] = {'value': price_vs_ma50_status, 'pts': 0, 'weighted_pts': 0}
 
 
             # 4. Calculate RSI
@@ -209,30 +209,30 @@ def calculate_scores_for_date(target_date_str):
                     elif rsi_value > config.RSI_OVERBOUGHT_THRESHOLD:
                         rsi_pts = config.RSI_OVERBOUGHT_PTS
                     # No points for neutral RSI
-                    score += rsi_pts
+                    score += rsi_pts * config.WEIGHT_RSI # Apply weight
                 else:
                     logging.warning(f"RSI calculation failed or resulted in NaN for {ticker}.")
                     rsi_value = None # Ensure it's None if calc failed
-                score_details['rsi'] = {'value': rsi_value, 'pts': rsi_pts}
+                score_details['rsi'] = {'value': rsi_value, 'pts': rsi_pts, 'weighted_pts': rsi_pts * config.WEIGHT_RSI}
             else:
                 logging.warning(f"Not enough data for {config.RSI_PERIOD}-day RSI for {ticker}.")
                 rsi_value = None
-                score_details['rsi'] = {'value': None, 'pts': 0}
+                score_details['rsi'] = {'value': None, 'pts': 0, 'weighted_pts': 0}
 
 
         else:
             logging.warning(f"Not enough price history data for {ticker} to calculate momentum/volume/MA/RSI.")
             # Assign neutral scores if not enough data
             # Assign neutral scores if not enough data for technicals
-            score_details['momentum'] = {'value': None, 'pts': config.PRICE_NEUTRAL_PTS}
-            score_details['volume'] = {'value': None, 'pts': config.VOLUME_NORMAL_PTS}
-            score_details['ma50'] = {'value': 'N/A', 'pts': 0}
-            score_details['rsi'] = {'value': None, 'pts': 0}
-            score += config.PRICE_NEUTRAL_PTS # Use config
-            score += config.VOLUME_NORMAL_PTS # Use config
+            score_details['momentum'] = {'value': None, 'pts': config.PRICE_NEUTRAL_PTS, 'weighted_pts': config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM}
+            score_details['volume'] = {'value': None, 'pts': config.VOLUME_NORMAL_PTS, 'weighted_pts': config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME}
+            score_details['ma50'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
+            score_details['rsi'] = {'value': None, 'pts': 0, 'weighted_pts': 0}
+            score += config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM # Apply weight
+            score += config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME # Apply weight
             price_vs_ma50_status = 'N/A' # Ensure status is N/A
 
-        # 5. Score P/E Ratio
+        # 6. Score P/E Ratio
         if pe_ratio is not None:
             pe_pts = 0
             if pe_ratio < config.PE_LOW_THRESHOLD and pe_ratio > 0: # Use config & Ensure P/E is positive
@@ -243,18 +243,18 @@ def calculate_scores_for_date(target_date_str):
                 pe_pts = config.PE_NEUTRAL_PTS_PE # Use config
         else:
             pe_pts = config.PE_NEUTRAL_PTS_PE # Use config
-        score += pe_pts
-        score_details['pe_ratio'] = {'value': pe_ratio, 'pts': pe_pts}
+        score += pe_pts * config.WEIGHT_PE_RATIO # Apply weight
+        score_details['pe_ratio'] = {'value': pe_ratio, 'pts': pe_pts, 'weighted_pts': pe_pts * config.WEIGHT_PE_RATIO}
 
-        # 6. Score Dividend Yield
+        # 7. Score Dividend Yield
         div_pts = 0
         if dividend_yield is not None and dividend_yield > config.DIV_YIELD_THRESHOLD: # Use config
             div_pts = config.DIV_YIELD_PTS # Use config
         # No points added or subtracted otherwise for dividend yield
-        score += div_pts
-        score_details['dividend'] = {'value': dividend_yield, 'pts': div_pts}
+        score += div_pts * config.WEIGHT_DIVIDEND # Apply weight
+        score_details['dividend'] = {'value': dividend_yield, 'pts': div_pts, 'weighted_pts': div_pts * config.WEIGHT_DIVIDEND}
 
-        # Log the final score and breakdown
+        # Log the final score and breakdown (now includes weighted points)
         logging.info(f"Scored {ticker} for {target_date_str}: Final Score={score}, Breakdown={score_details}")
 
         # Store the calculated score and components

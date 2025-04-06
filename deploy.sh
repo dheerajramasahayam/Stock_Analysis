@@ -6,7 +6,7 @@
 APP_DIR="/home/hasher/Stocks_Analysis" # IMPORTANT: Change this to the actual deployment path on your server
 GIT_REPO="https://github.com/dheerajramasahayam/Stock_Analysis.git" # IMPORTANT: Change this to your Git repo URL (e.g., git@github.com:user/repo.git)
 PYTHON_VERSION="python3" # Or python3, adjust if needed
-VENV_DIR="backend/venv"
+# VENV_DIR="backend/venv" # No longer using venv
 
 # --- Environment Variables (Set these on your server!) ---
 # export GEMINI_API_KEY="your_gemini_key"
@@ -51,32 +51,26 @@ else
     git pull || exit 1
 fi
 
-# --- Python Virtual Environment ---
-echo "Setting up virtual environment..."
-if [ ! -d "$VENV_DIR" ]; then
-    $PYTHON_VERSION -m venv $VENV_DIR || exit 1
-fi
+# --- Install/Update Dependencies (User-wide) ---
+echo "Installing/Updating Python dependencies for user..."
+$PYTHON_VERSION -m pip install --upgrade pip
+$PYTHON_VERSION -m pip install --user -r requirements.txt || exit 1
+# Ensure the user's local bin directory is in the PATH if needed
+# export PATH="$HOME/.local/bin:$PATH" # May need to add this to ~/.bashrc or ~/.profile
 
-# Activate virtual environment (for this script's context) and install/update dependencies
-source $VENV_DIR/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt || exit 1
-deactivate # Deactivate after installing
-
-# --- Database Initialization (Run only if DB doesn't exist) ---
 # --- Database Initialization (Run only if DB doesn't exist) ---
 # Note: Assumes the .env file is loaded for these script runs too
 if [ ! -f "stocks.db" ]; then
     echo "Initializing database..."
-    $VENV_DIR/bin/python backend/database.py || exit 1 # This path is relative to APP_DIR, still okay
+    $PYTHON_VERSION backend/database.py || exit 1
     echo "Running initial data fetch (this may take a long time)..."
-    $VENV_DIR/bin/python backend/data_fetcher.py || exit 1 # This path is relative to APP_DIR, still okay
+    $PYTHON_VERSION backend/data_fetcher.py || exit 1 # Run fetcher only on first setup
     echo "Running initial scoring..."
-    $VENV_DIR/bin/python backend/scorer.py || exit 1 # This path is relative to APP_DIR, still okay
+    $PYTHON_VERSION backend/scorer.py || exit 1 # Run scorer only on first setup
 else
     echo "Database already exists, skipping initialization and initial data fetch/score."
     # Optional: Run database migrations/updates if needed in the future
-    # $VENV_DIR/bin/python backend/database.py # Ensure schema is up-to-date
+    # $PYTHON_VERSION backend/database.py # Ensure schema is up-to-date
 fi
 
 

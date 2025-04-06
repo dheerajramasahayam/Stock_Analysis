@@ -53,7 +53,16 @@ def get_highlighted_stocks():
             ORDER BY ds.score DESC -- Default sort by score descending
         """, (latest_date,))
 
-        stocks_data = [dict(row) for row in cursor.fetchall()] # Convert rows to dicts
+        # Convert rows to dicts and handle non-JSON serializable values (Infinity, NaN)
+        stocks_data = []
+        for row in cursor.fetchall():
+            stock_dict = dict(row)
+            for key, value in stock_dict.items():
+                # Replace float('inf'), float('-inf'), float('nan') with None
+                if isinstance(value, float) and (value == float('inf') or value == float('-inf') or value != value): # Check for NaN
+                    stock_dict[key] = None
+            stocks_data.append(stock_dict)
+
         conn.close()
         return jsonify(stocks_data)
 

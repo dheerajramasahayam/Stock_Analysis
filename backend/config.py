@@ -1,9 +1,13 @@
 import os
 from dotenv import load_dotenv
 
-# Load .env file from project root
+# Load .env file from project root (one level up from this config file's directory)
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-load_dotenv(dotenv_path=dotenv_path)
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path=dotenv_path)
+else:
+    print("Warning: .env file not found at expected location:", dotenv_path)
+
 
 # Configuration settings for the Stock Analyzer application
 

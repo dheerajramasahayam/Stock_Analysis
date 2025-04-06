@@ -107,9 +107,9 @@ def get_stock_details(ticker):
         ]
 
         # Get the latest Gemini analysis summary and score
-        # Get the most recent Gemini analysis summary and score available for the ticker
+        # Get the most recent Gemini analysis summary, score, and points available for the ticker
         cursor.execute("""
-            SELECT gemini_summary, sentiment_score
+            SELECT gemini_summary, sentiment_score, bullish_points, bearish_points
             FROM news_articles
             WHERE ticker = ?
             ORDER BY published_date DESC, fetched_date DESC
@@ -118,10 +118,21 @@ def get_stock_details(ticker):
         analysis_row = cursor.fetchone()
         if analysis_row:
             details['gemini_summary'] = analysis_row['gemini_summary']
+            # Parse the JSON strings back into lists
+            try:
+                details['bullish_points'] = json.loads(analysis_row['bullish_points'] or '[]')
+            except json.JSONDecodeError:
+                details['bullish_points'] = ["Error decoding bullish points."]
+            try:
+                details['bearish_points'] = json.loads(analysis_row['bearish_points'] or '[]')
+            except json.JSONDecodeError:
+                details['bearish_points'] = ["Error decoding bearish points."]
             # Optionally include the sentiment score if needed on frontend details
             # details['gemini_sentiment'] = analysis_row['sentiment_score']
         else:
             details['gemini_summary'] = "No analysis available for the latest date."
+            details['bullish_points'] = []
+            details['bearish_points'] = []
             # details['gemini_sentiment'] = None
 
         conn.close()

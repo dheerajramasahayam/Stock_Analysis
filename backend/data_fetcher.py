@@ -254,11 +254,15 @@ def update_data_for_ticker(ticker):
 
     try:
         # Use INSERT OR REPLACE to update the analysis if run multiple times on the same day
+        # Store lists as JSON strings
+        bullish_json = json.dumps(analysis_result.get('bullish_points', []))
+        bearish_json = json.dumps(analysis_result.get('bearish_points', []))
+
         cursor.execute(
             """
             INSERT OR REPLACE INTO news_articles
-            (ticker, url, title, snippet, published_date, fetched_date, sentiment_score, gemini_summary)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (ticker, url, title, snippet, published_date, fetched_date, sentiment_score, gemini_summary, bullish_points, bearish_points)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ticker,
@@ -268,7 +272,9 @@ def update_data_for_ticker(ticker):
                 analysis_date_str, # Use analysis date
                 now_iso, # Fetched/Analysis timestamp
                 analysis_result.get('sentiment_score', 0.0),
-                analysis_result.get('summary', 'Analysis failed.')
+                analysis_result.get('summary', 'Analysis failed.'),
+                bullish_json,
+                bearish_json
             )
         )
         conn.commit()

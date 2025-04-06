@@ -100,23 +100,27 @@ def analyze_search_results(ticker, company_name, search_results):
         print("Error: Gemini analysis model not initialized.")
         return {"summary": "Error: Analysis model not available.", "sentiment_score": 0.0}
     if not search_results:
-        return {"summary": "No search results found to analyze.", "sentiment_score": 0.0}
+        return {"summary": "No search results found to analyze.", "sentiment_score": 0.0, "bullish_points": [], "bearish_points": []}
 
-    # Prepare context from search results
+    # Prepare context from search results, limiting total results to avoid excessive context
     context = ""
-    for i, result in enumerate(search_results[:5]): # Limit context size
-        context += f"Result {i+1}:\nTitle: {result.get('title', 'N/A')}\nSnippet: {result.get('snippet', 'N/A')}\nDate: {result.get('date', 'N/A')}\n\n"
+    max_context_results = 6 # Limit total results fed to analysis model
+    for i, result in enumerate(search_results[:max_context_results]):
+        context += f"Result {i+1}:\nTitle: {result.get('title', 'N/A')}\nSnippet: {result.get('snippet', 'N/A')}\nDate: {result.get('date', 'N/A')}\nURL: {result.get('url', 'N/A')}\n\n"
 
     prompt = f"""
-    Analyze the following recent search results regarding {company_name} ({ticker}).
-    Provide a brief, neutral summary (2-3 sentences) of the key factors or news currently impacting the stock based *only* on these results.
-    Then, provide an overall sentiment score based *only* on these results, ranging from -1.0 (very negative) to +1.0 (very positive), with 0.0 being neutral.
+    Analyze the following recent web search results regarding {company_name} ({ticker}).
+    Based *only* on the provided search results context:
+    1. Provide a brief, neutral summary (2-3 sentences) of the key factors or news currently impacting the stock.
+    2. List the top 1-2 bullish points mentioned in the results (as a JSON list of strings). If none, use an empty list [].
+    3. List the top 1-2 bearish points mentioned in the results (as a JSON list of strings). If none, use an empty list [].
+    4. Provide an overall sentiment score based *only* on these results, ranging from -1.0 (very negative) to +1.0 (very positive), with 0.0 being neutral.
 
     Search Results Context:
     {context}
 
-    Output the result as a JSON object with keys "summary" (string) and "sentiment_score" (float).
-    Example: {{"summary": "Recent news highlights concerns about X but also potential growth in Y.", "sentiment_score": -0.2}}
+    Output the result STRICTLY as a JSON object with keys "summary" (string), "bullish_points" (list of strings), "bearish_points" (list of strings), and "sentiment_score" (float).
+    Example: {{"summary": "Recent news highlights concerns about X but also potential growth in Y.", "bullish_points": ["Potential growth in Y mentioned in Result 3."], "bearish_points": ["Concerns about X noted in Result 1.", "Result 5 mentions market headwinds."], "sentiment_score": -0.2}}
     """
 
     try:
@@ -126,33 +130,56 @@ def analyze_search_results(ticker, company_name, search_results):
         analysis = json.loads(cleaned_response)
 
         # Validate structure
-        if isinstance(analysis, dict) and "summary" in analysis and "sentiment_score" in analysis:
+        if isinstance(analysis, dict) and \
+           "summary" in analysis and \
+           "bullish_points" in analysis and isinstance(analysis["bullish_points"], list) and \
+           "bearish_points" in analysis and isinstance(analysis["bearish_points"], list) and \
+           "sentiment_score" in analysis:
              # Ensure score is a float
-             analysis["sentiment_score"] = float(analysis["sentiment_score"])
+             try:
+                 analysis["sentiment_score"] = float(analysis["sentiment_score"])
+             except (ValueError, TypeError):
+                 print(f"  Warning: Could not convert sentiment score '{analysis['sentiment_score']}' to float for {ticker}. Defaulting to 0.0.")
+                 analysis["sentiment_score"] = 0.0
+
              print(f"  Gemini analysis for {ticker}: Score={analysis['sentiment_score']:.2f}, Summary='{analysis['summary'][:50]}...'")
+             # Ensure points are lists of strings (handle potential non-string items)
+             analysis["bullish_points"] = [str(item) for item in analysis["bullish_points"]]
+             analysis["bearish_points"] = [str(item) for item in analysis["bearish_points"]]
              return analysis
         else:
-             print(f"  Error: Gemini analysis returned unexpected format for {ticker}: {response.text}")
-             return {"summary": "Analysis format error.", "sentiment_score": 0.0}
+             print(f"  Error: Gemini analysis returned unexpected JSON structure for {ticker}: {cleaned_response}")
+             # Return default structure on format error
+             return {"summary": "Analysis format error.", "sentiment_score": 0.0, "bullish_points": [], "bearish_points": []}
 
+    except json.JSONDecodeError as e:
+        print(f"  Error decoding Gemini JSON response for {ticker}: {e}")
+        print(f"  Gemini Raw Response: {cleaned_response if 'cleaned_response' in locals() else 'N/A'}")
+        return {"summary": "Analysis JSON error.", "sentiment_score": 0.0, "bullish_points": [], "bearish_points": []}
     except Exception as e:
         print(f"  Error analyzing search results for {ticker} with Gemini: {e}")
         print(f"  Gemini Raw Response: {response.text if 'response' in locals() else 'N/A'}")
-        return {"summary": "Analysis error.", "sentiment_score": 0.0}
+        return {"summary": "Analysis error.", "sentiment_score": 0.0, "bullish_points": [], "bearish_points": []}
+
 
 def get_analysis_for_stock(ticker, company_name):
     """Orchestrates the process: generate query, search, analyze."""
     print(f"--- Starting Gemini analysis for {ticker} ---")
     search_queries = generate_search_queries(ticker, company_name)
 
+    # Default result structure
+    default_result = {"summary": "Analysis failed.", "sentiment_score": 0.0, "bullish_points": [], "bearish_points": []}
+
     if not search_queries:
-        return {"summary": "Failed to generate search queries.", "sentiment_score": 0.0}
+        default_result["summary"] = "Failed to generate search queries."
+        return default_result
 
     # Search for each query and collect results
     all_search_results = []
     max_results_per_query = 2 # Limit results from each query to keep context manageable
     for i, query in enumerate(search_queries):
-        if i > 0: # Add delay between Brave API calls
+        # Add delay between Brave API calls, especially after the first one
+        if i > 0:
             time.sleep(1)
         results = search_with_brave(query)
         if results:
@@ -172,8 +199,18 @@ def get_analysis_for_stock(ticker, company_name):
         import logging
         logging.info(f"Collected {len(unique_results)} unique search results from {len(search_queries)} queries for {ticker}.")
     except ImportError:
-        print(f"INFO: Collected {len(unique_results)} unique search results from {len(search_queries)} queries for {ticker}.")
+        # Use logging module if available, otherwise print
+        try:
+            import logging
+            logging.info(f"Collected {len(unique_results)} unique search results from {len(search_queries)} queries for {ticker}.")
+        except ImportError:
+             # Fallback print if logging fails to import (less likely now but safe)
+             print(f"INFO: Collected {len(unique_results)} unique search results from {len(search_queries)} queries for {ticker}.")
 
+
+    if not unique_results:
+        default_result["summary"] = "No unique search results found after querying."
+        return default_result
 
     analysis = analyze_search_results(ticker, company_name, unique_results) # Pass unique results
     print(f"--- Finished Gemini analysis for {ticker} ---")

@@ -101,8 +101,10 @@ document.addEventListener('DOMContentLoaded', () => {
             detailsNameH3.textContent = details.name || `${details.ticker} Details`;
             detailsSectorSpan.textContent = details.sector || 'N/A';
 
-            // Display Gemini Summary
+            // Display Gemini Summary and Points
             detailsGeminiSummaryP.textContent = details.gemini_summary || 'No analysis summary available.';
+            renderAnalysisPoints('details-bullish-points', details.bullish_points || []);
+            renderAnalysisPoints('details-bearish-points', details.bearish_points || []);
 
             // Render chart
             renderPriceChart(details.price_history || []);
@@ -172,6 +174,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (priceChart) {
             priceChart.destroy(); // Clean up chart
             priceChart = null;
+        }
+    }
+
+    // --- Event Listeners ---
+    // --- Render Bullish/Bearish Points ---
+    function renderAnalysisPoints(elementId, points) {
+        const listElement = document.getElementById(elementId);
+        listElement.innerHTML = ''; // Clear previous points
+        if (points.length === 0) {
+            listElement.innerHTML = '<li>None identified in recent results.</li>';
+        } else {
+            points.forEach(point => {
+                const li = document.createElement('li');
+                li.textContent = point;
+                listElement.appendChild(li);
+            });
         }
     }
 

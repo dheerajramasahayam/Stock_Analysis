@@ -73,6 +73,12 @@ MACD_SIGNAL = 9
 MACD_CROSS_BULLISH_PTS = 1
 MACD_CROSS_BEARISH_PTS = -1
 
+# Bollinger Bands (BBands)
+BBANDS_PERIOD = 20
+BBANDS_STDDEV = 2.0
+BBANDS_LOWER_CROSS_PTS = 1 # Price crossing below lower band
+BBANDS_UPPER_CROSS_PTS = -1 # Price crossing above upper band
+
 # --- Scoring Weights (Adjust to prioritize factors) ---
 WEIGHT_SENTIMENT = 1.0
 WEIGHT_MOMENTUM = 1.0
@@ -81,7 +87,8 @@ WEIGHT_PE_RATIO = 1.0
 WEIGHT_DIVIDEND = 1.0
 WEIGHT_MA50 = 1.0
 WEIGHT_RSI = 1.0
-WEIGHT_MACD = 1.0 # Add weight for MACD
+WEIGHT_MACD = 1.0
+WEIGHT_BBANDS = 1.0 # Add weight for Bollinger Bands
 
 # --- Portfolio ---
 PORTFOLIO_SELL_SCORE_THRESHOLD = -1 # Suggest selling if score drops below this

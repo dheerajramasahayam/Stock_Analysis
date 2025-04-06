@@ -47,7 +47,8 @@ def get_highlighted_stocks():
                 ds.dividend_yield,
                 ds.price_vs_ma50, -- Add MA status column
                 ds.rsi, -- Add RSI column
-                ds.macd_signal -- Add MACD signal column
+                ds.macd_signal, -- Add MACD signal column
+                ds.bbands_signal -- Add BBands signal column
             FROM daily_scores ds
             JOIN companies c ON ds.ticker = c.ticker
             WHERE ds.date = ?

@@ -82,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p><span class="label">Price vs MA(50):</span> ${stock.price_vs_ma50 ?? 'N/A'}</p>
                 <p><span class="label">RSI(14):</span> ${stock.rsi?.toFixed(2) ?? 'N/A'}</p>
                 <p><span class="label">MACD Signal:</span> ${stock.macd_signal ?? 'N/A'}</p>
+                <p><span class="label">BBands Signal:</span> ${stock.bbands_signal ?? 'N/A'}</p>
             `;
             card.addEventListener('click', () => showStockDetails(stock.ticker));
             stockListDiv.appendChild(card);

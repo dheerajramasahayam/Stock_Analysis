@@ -57,6 +57,7 @@ def calculate_scores_for_date(target_date_str):
         price_vs_ma50_status = 'N/A' # Initialize MA status
         rsi_value = None # Initialize RSI value
         macd_signal_status = 'neutral' # Initialize MACD signal
+        bbands_signal_status = 'neutral' # Initialize BBands signal
 
         # --- Fetch Fundamental Data (P/E, Dividend Yield) ---
         # We need to fetch this fresh as it's not stored in price_history
@@ -259,22 +260,64 @@ def calculate_scores_for_date(target_date_str):
                 macd_signal_status = 'N/A' # Indicate not enough data
             score_details['macd'] = {'value': macd_signal_status, 'pts': macd_pts, 'weighted_pts': macd_pts * config.WEIGHT_MACD}
 
+            # 6. Calculate Bollinger Bands and check for crossover
+            bbands_pts = 0
+            if len(df) >= config.BBANDS_PERIOD:
+                # Calculate BBands
+                df.ta.bbands(length=config.BBANDS_PERIOD, std=config.BBANDS_STDDEV, append=True)
+                lower_band_col = f'BBL_{config.BBANDS_PERIOD}_{config.BBANDS_STDDEV}'
+                upper_band_col = f'BBU_{config.BBANDS_PERIOD}_{config.BBANDS_STDDEV}'
+
+                # Check if columns exist and have at least 2 non-NaN values at the end
+                if lower_band_col in df.columns and upper_band_col in df.columns and \
+                   not pd.isna(df['close_price'].iloc[-1]) and not pd.isna(df[lower_band_col].iloc[-1]) and \
+                   not pd.isna(df['close_price'].iloc[-2]) and not pd.isna(df[lower_band_col].iloc[-2]) and \
+                   not pd.isna(df[upper_band_col].iloc[-1]) and not pd.isna(df[upper_band_col].iloc[-2]):
+
+                    price_now = df['close_price'].iloc[-1]
+                    lower_now = df[lower_band_col].iloc[-1]
+                    upper_now = df[upper_band_col].iloc[-1]
+                    price_prev = df['close_price'].iloc[-2]
+                    lower_prev = df[lower_band_col].iloc[-2]
+                    upper_prev = df[upper_band_col].iloc[-2]
+
+                    # Bullish signal: Price crosses below lower band
+                    if price_prev > lower_prev and price_now < lower_now:
+                        bbands_pts = config.BBANDS_LOWER_CROSS_PTS
+                        bbands_signal_status = 'cross_lower'
+                    # Bearish signal: Price crosses above upper band
+                    elif price_prev < upper_prev and price_now > upper_now:
+                        bbands_pts = config.BBANDS_UPPER_CROSS_PTS
+                        bbands_signal_status = 'cross_upper'
+                    # else: neutral
+
+                    score += bbands_pts * config.WEIGHT_BBANDS # Apply weight
+                else:
+                    logging.warning(f"BBands calculation failed or not enough data points for crossover check for {ticker}.")
+                    bbands_signal_status = 'N/A'
+            else:
+                logging.warning(f"Not enough data for Bollinger Bands calculation for {ticker}.")
+                bbands_signal_status = 'N/A'
+            score_details['bbands'] = {'value': bbands_signal_status, 'pts': bbands_pts, 'weighted_pts': bbands_pts * config.WEIGHT_BBANDS}
+
 
         else:
-            logging.warning(f"Not enough price history data for {ticker} to calculate momentum/volume/MA/RSI/MACD.")
+            logging.warning(f"Not enough price history data for {ticker} to calculate momentum/volume/MA/RSI/MACD/BBands.")
             # Assign neutral scores if not enough data
             # Assign neutral scores if not enough data for technicals
             score_details['momentum'] = {'value': None, 'pts': config.PRICE_NEUTRAL_PTS, 'weighted_pts': config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM}
             score_details['volume'] = {'value': None, 'pts': config.VOLUME_NORMAL_PTS, 'weighted_pts': config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME}
             score_details['ma50'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
             score_details['rsi'] = {'value': None, 'pts': 0, 'weighted_pts': 0}
-            score_details['macd'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0} # Add MACD neutral
+            score_details['macd'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
+            score_details['bbands'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0} # Add BBands neutral
             score += config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM # Apply weight
             score += config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME # Apply weight
             price_vs_ma50_status = 'N/A' # Ensure status is N/A
             macd_signal_status = 'N/A' # Ensure status is N/A
+            bbands_signal_status = 'N/A' # Ensure status is N/A
 
-        # 7. Score P/E Ratio
+        # 8. Score P/E Ratio
         if pe_ratio is not None:
             pe_pts = 0
             if pe_ratio < config.PE_LOW_THRESHOLD and pe_ratio > 0: # Use config & Ensure P/E is positive
@@ -288,7 +331,7 @@ def calculate_scores_for_date(target_date_str):
         score += pe_pts * config.WEIGHT_PE_RATIO # Apply weight
         score_details['pe_ratio'] = {'value': pe_ratio, 'pts': pe_pts, 'weighted_pts': pe_pts * config.WEIGHT_PE_RATIO}
 
-        # 8. Score Dividend Yield
+        # 9. Score Dividend Yield
         div_pts = 0
         if dividend_yield is not None and dividend_yield > config.DIV_YIELD_THRESHOLD: # Use config
             div_pts = config.DIV_YIELD_PTS # Use config
@@ -311,16 +354,17 @@ def calculate_scores_for_date(target_date_str):
             dividend_yield, # Store Div Yield
             price_vs_ma50_status, # Store MA status
             rsi_value, # Store RSI value
-            macd_signal_status # Store MACD signal
+            macd_signal_status, # Store MACD signal
+            bbands_signal_status # Store BBands signal
         ))
 
     # Insert all calculated scores into the database
     try:
         cursor.executemany("""
             INSERT OR REPLACE INTO daily_scores
-            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, all_scores) # Added macd_signal
+            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, all_scores) # Added bbands_signal
         conn.commit()
         print(f"Successfully calculated and stored scores for {len(all_scores)} tickers.")
     except Exception as e:

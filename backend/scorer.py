@@ -56,6 +56,7 @@ def calculate_scores_for_date(target_date_str):
         dividend_yield = None
         price_vs_ma50_status = 'N/A' # Initialize MA status
         rsi_value = None # Initialize RSI value
+        macd_signal_status = 'neutral' # Initialize MACD signal
 
         # --- Fetch Fundamental Data (P/E, Dividend Yield) ---
         # We need to fetch this fresh as it's not stored in price_history
@@ -219,20 +220,61 @@ def calculate_scores_for_date(target_date_str):
                 rsi_value = None
                 score_details['rsi'] = {'value': None, 'pts': 0, 'weighted_pts': 0}
 
+            # 5. Calculate MACD and check for crossover
+            macd_pts = 0
+            # Need enough data points for MACD calculation (depends on slow period + signal period)
+            if len(df) >= config.MACD_SLOW + config.MACD_SIGNAL:
+                # Calculate MACD
+                df.ta.macd(fast=config.MACD_FAST, slow=config.MACD_SLOW, signal=config.MACD_SIGNAL, append=True)
+                macd_line_col = f'MACD_{config.MACD_FAST}_{config.MACD_SLOW}_{config.MACD_SIGNAL}'
+                signal_line_col = f'MACDs_{config.MACD_FAST}_{config.MACD_SLOW}_{config.MACD_SIGNAL}'
+
+                # Check if columns exist and have at least 2 non-NaN values at the end
+                if macd_line_col in df.columns and signal_line_col in df.columns and \
+                   not pd.isna(df[macd_line_col].iloc[-1]) and not pd.isna(df[signal_line_col].iloc[-1]) and \
+                   not pd.isna(df[macd_line_col].iloc[-2]) and not pd.isna(df[signal_line_col].iloc[-2]):
+
+                    # Check for crossover in the last period
+                    macd_now = df[macd_line_col].iloc[-1]
+                    signal_now = df[signal_line_col].iloc[-1]
+                    macd_prev = df[macd_line_col].iloc[-2]
+                    signal_prev = df[signal_line_col].iloc[-2]
+
+                    # Bullish crossover: MACD was below signal, now above
+                    if macd_prev < signal_prev and macd_now > signal_now:
+                        macd_pts = config.MACD_CROSS_BULLISH_PTS
+                        macd_signal_status = 'bullish_cross'
+                    # Bearish crossover: MACD was above signal, now below
+                    elif macd_prev > signal_prev and macd_now < signal_now:
+                        macd_pts = config.MACD_CROSS_BEARISH_PTS
+                        macd_signal_status = 'bearish_cross'
+                    # else: neutral (no crossover)
+
+                    score += macd_pts * config.WEIGHT_MACD # Apply weight
+                else:
+                    logging.warning(f"MACD calculation failed or not enough data points for crossover check for {ticker}.")
+                    macd_signal_status = 'N/A' # Indicate calculation issue
+            else:
+                logging.warning(f"Not enough data for MACD calculation for {ticker}.")
+                macd_signal_status = 'N/A' # Indicate not enough data
+            score_details['macd'] = {'value': macd_signal_status, 'pts': macd_pts, 'weighted_pts': macd_pts * config.WEIGHT_MACD}
+
 
         else:
-            logging.warning(f"Not enough price history data for {ticker} to calculate momentum/volume/MA/RSI.")
+            logging.warning(f"Not enough price history data for {ticker} to calculate momentum/volume/MA/RSI/MACD.")
             # Assign neutral scores if not enough data
             # Assign neutral scores if not enough data for technicals
             score_details['momentum'] = {'value': None, 'pts': config.PRICE_NEUTRAL_PTS, 'weighted_pts': config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM}
             score_details['volume'] = {'value': None, 'pts': config.VOLUME_NORMAL_PTS, 'weighted_pts': config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME}
             score_details['ma50'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
             score_details['rsi'] = {'value': None, 'pts': 0, 'weighted_pts': 0}
+            score_details['macd'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0} # Add MACD neutral
             score += config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM # Apply weight
             score += config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME # Apply weight
             price_vs_ma50_status = 'N/A' # Ensure status is N/A
+            macd_signal_status = 'N/A' # Ensure status is N/A
 
-        # 6. Score P/E Ratio
+        # 7. Score P/E Ratio
         if pe_ratio is not None:
             pe_pts = 0
             if pe_ratio < config.PE_LOW_THRESHOLD and pe_ratio > 0: # Use config & Ensure P/E is positive
@@ -246,7 +288,7 @@ def calculate_scores_for_date(target_date_str):
         score += pe_pts * config.WEIGHT_PE_RATIO # Apply weight
         score_details['pe_ratio'] = {'value': pe_ratio, 'pts': pe_pts, 'weighted_pts': pe_pts * config.WEIGHT_PE_RATIO}
 
-        # 7. Score Dividend Yield
+        # 8. Score Dividend Yield
         div_pts = 0
         if dividend_yield is not None and dividend_yield > config.DIV_YIELD_THRESHOLD: # Use config
             div_pts = config.DIV_YIELD_PTS # Use config
@@ -268,16 +310,17 @@ def calculate_scores_for_date(target_date_str):
             pe_ratio, # Store P/E
             dividend_yield, # Store Div Yield
             price_vs_ma50_status, # Store MA status
-            rsi_value # Store RSI value
+            rsi_value, # Store RSI value
+            macd_signal_status # Store MACD signal
         ))
 
     # Insert all calculated scores into the database
     try:
         cursor.executemany("""
             INSERT OR REPLACE INTO daily_scores
-            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, all_scores) # Added rsi
+            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, all_scores) # Added macd_signal
         conn.commit()
         print(f"Successfully calculated and stored scores for {len(all_scores)} tickers.")
     except Exception as e:

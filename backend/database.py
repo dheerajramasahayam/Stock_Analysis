@@ -75,6 +75,7 @@ def init_db():
             dividend_yield REAL, -- Add Dividend Yield
             price_vs_ma50 TEXT, -- Add MA comparison ('above', 'below', 'N/A')
             rsi REAL, -- Add RSI value
+            macd_signal TEXT, -- Add MACD signal ('bullish_cross', 'bearish_cross', 'neutral')
             PRIMARY KEY (ticker, date),
             FOREIGN KEY (ticker) REFERENCES companies (ticker)
         )
@@ -160,6 +161,15 @@ def init_db():
     except sqlite3.OperationalError as e:
         if "duplicate column name" in str(e):
             print("bearish_points column already exists.")
+        else: raise e
+
+    # --- Add macd_signal column if it doesn't exist ---
+    try:
+        cursor.execute("ALTER TABLE daily_scores ADD COLUMN macd_signal TEXT")
+        print("Added macd_signal column to daily_scores table.")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            print("macd_signal column already exists.")
         else: raise e
 
     conn.commit()

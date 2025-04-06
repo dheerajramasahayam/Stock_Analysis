@@ -11,9 +11,9 @@ WorkingDirectory=/home/hasher/Stock_Analysis/backend
 # Load environment variables from .env file in the *project root*
 EnvironmentFile=/home/hasher/Stock_Analysis/.env
 # Set PYTHONPATH so imports work when run from backend dir
-# Execute gunicorn (assuming it's in PATH) pointing to app:app within the backend directory
+# Execute gunicorn using its full path (adjust if 'which gunicorn' shows different path)
 # Bind to localhost TCP port
-ExecStart=/bin/bash -c 'cd /home/hasher/Stock_Analysis/backend && PYTHONPATH=/home/hasher/Stock_Analysis/backend gunicorn --workers 3 --bind 127.0.0.1:5000 app:app'
+ExecStart=/bin/bash -c 'cd /home/hasher/Stock_Analysis/backend && PYTHONPATH=/home/hasher/Stock_Analysis/backend /home/hasher/.local/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 app:app'
 Restart=always
 RestartSec=5s
 

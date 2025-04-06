@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Analyzer</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Include Chart.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Stock Analyzer Dashboard</h1>
+    </header>
+
+    <main>
+        <section id="controls">
+            <h2>Controls</h2>
+            <label for="sector-filter">Filter by Sector:</label>
+            <select id="sector-filter">
+                <option value="all">All Sectors</option>
+                <option value="Technology">Technology</option>
+                <option value="Healthcare">Healthcare</option>
+                <option value="Defense">Defense</option>
+            </select>
+
+            <label for="sort-by">Sort by:</label>
+            <select id="sort-by">
+                <option value="score_desc">Score (High to Low)</option>
+                <option value="score_asc">Score (Low to High)</option>
+                <option value="price_change_desc">Price Change % (High to Low)</option>
+                <option value="price_change_asc">Price Change % (Low to High)</option>
+                <option value="sentiment_desc">Avg Sentiment (High to Low)</option>
+                <option value="sentiment_asc">Avg Sentiment (Low to High)</option>
+            </select>
+            <button id="apply-filters">Apply</button>
+        </section>
+
+        <section id="highlighted-stocks">
+            <h2>Highlighted Stocks</h2>
+            <div id="stock-list">
+                <!-- Stock cards will be loaded here by JavaScript -->
+                <p>Loading stocks...</p>
+            </div>
+        </section>
+
+        <section id="stock-details" class="hidden">
+            <h2>Stock Details (<span id="details-ticker"></span>)</h2>
+            <button id="close-details">Close Details</button>
+            <div id="details-content">
+                <h3 id="details-name"></h3>
+                <p>Sector: <span id="details-sector"></span></p>
+                <div class="chart-container">
+                    <canvas id="price-chart"></canvas>
+                </div>
+                <h3>AI Analysis Summary</h3>
+                <p id="details-gemini-summary">Loading summary...</p>
+                <!-- Remove the old news list UL -->
+            </div>
+        </section>
+
+        <section id="portfolio">
+            <h2>My Portfolio</h2>
+            <div id="add-holding-form">
+                <h3>Add New Holding</h3>
+                <form id="portfolio-form">
+                    <label for="portfolio-ticker">Ticker:</label>
+                    <input type="text" id="portfolio-ticker" name="ticker" required maxlength="5">
+
+                    <label for="portfolio-quantity">Quantity:</label>
+                    <input type="number" id="portfolio-quantity" name="quantity" required min="1">
+
+                    <label for="portfolio-price">Purchase Price:</label>
+                    <input type="number" id="portfolio-price" name="purchase_price" required min="0.01" step="0.01">
+
+                    <label for="portfolio-date">Purchase Date:</label>
+                    <input type="date" id="portfolio-date" name="purchase_date" required>
+
+                    <button type="submit">Add Holding</button>
+                    <p id="portfolio-message" class="message"></p>
+                </form>
+            </div>
+            <div id="portfolio-list">
+                <h3>Current Holdings</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th>Name</th>
+                            <th>Quantity</th>
+                            <th>Purchase Price</th>
+                            <th>Purchase Date</th>
+                            <th>Current Price</th>
+                            <th>Gain/Loss (%)</th>
+                            <th>Latest Score</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="portfolio-table-body">
+                        <!-- Portfolio items will be loaded here -->
+                        <tr><td colspan="9">Loading portfolio...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        <p>Stock Analyzer - Phase 1</p>
+    </footer>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

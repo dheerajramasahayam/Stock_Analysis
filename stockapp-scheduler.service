@@ -1,0 +1,17 @@
+[Unit]
+Description=Stock Analyzer Scheduler Service
+After=network.target # Ensure network is up
+
+[Service]
+# IMPORTANT: Replace 'your_user' and '/path/to/your/app/Stocks_Analysis' below
+User=your_user
+Group=your_user
+WorkingDirectory=/path/to/your/app/Stocks_Analysis
+# Load environment variables from a file (optional but recommended)
+# EnvironmentFile=/path/to/your/app/Stocks_Analysis/.env
+ExecStart=/path/to/your/app/Stocks_Analysis/backend/venv/bin/python backend/scheduler.py
+Restart=always
+RestartSec=10s # Restart after 10 seconds if it crashes
+
+[Install]
+WantedBy=multi-user.target

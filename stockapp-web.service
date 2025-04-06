@@ -1,0 +1,17 @@
+[Unit]
+Description=Gunicorn instance to serve Stock Analyzer Flask app
+After=network.target # Ensure network is up
+
+[Service]
+# IMPORTANT: Replace 'your_user' and '/path/to/your/app/Stocks_Analysis' below
+User=your_user
+Group=your_user # Or www-data if running with web server group
+WorkingDirectory=/path/to/your/app/Stocks_Analysis
+# Load environment variables from a file (optional but recommended)
+# EnvironmentFile=/path/to/your/app/Stocks_Analysis/.env
+ExecStart=/path/to/your/app/Stocks_Analysis/backend/venv/bin/gunicorn --workers 3 --bind unix:stockapp.sock -m 007 backend.app:app
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

@@ -11,8 +11,8 @@ WorkingDirectory=/home/hasher/Stock_Analysis/backend
 # Load environment variables from .env file in the *project root*
 EnvironmentFile=/home/hasher/Stock_Analysis/.env
 # Execute gunicorn pointing to app:app within the backend directory
-# Using absolute path for socket file
-ExecStart=/home/hasher/Stock_Analysis/backend/venv/bin/gunicorn --workers 3 --bind unix:/home/hasher/Stock_Analysis/stockapp.sock -m 007 app:app
+# Bind to localhost TCP port instead of socket
+ExecStart=/home/hasher/Stock_Analysis/backend/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 app:app
 Restart=always
 RestartSec=5s
 

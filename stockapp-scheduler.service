@@ -10,8 +10,9 @@ Group=hasher
 WorkingDirectory=/home/hasher/Stock_Analysis/backend
 # Load environment variables from .env file in the *project root*
 EnvironmentFile=/home/hasher/Stock_Analysis/.env
+# Set PYTHONPATH so imports work when run from backend dir
 # Execute scheduler.py using its filename relative to the WorkingDirectory
-ExecStart=/home/hasher/Stock_Analysis/backend/venv/bin/python scheduler.py
+ExecStart=/bin/bash -c 'cd /home/hasher/Stock_Analysis/backend && PYTHONPATH=/home/hasher/Stock_Analysis/backend /home/hasher/Stock_Analysis/backend/venv/bin/python scheduler.py'
 Restart=always
 RestartSec=10s # Restart after 10 seconds if it crashes
 

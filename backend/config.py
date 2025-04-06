@@ -3,9 +3,9 @@ import os # Import os module
 # Configuration settings for the Stock Analyzer application
 
 # --- API Keys ---
-# Read from environment variables first, with fallback to hardcoded values for local dev
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyArLCpexG7DP6Asw7QEwWdD3rcVR54wb0k')
-BRAVE_API_KEY = os.getenv('BRAVE_API_KEY', 'BSAktcVFjSTjybk0SGY0U5xQwMfRfrV')
+# Read from environment variables. These MUST be set in the environment for the app to work.
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+BRAVE_API_KEY = os.getenv('BRAVE_API_KEY')
 
 # --- Data Fetching ---
 TICKER_LIST_FILE = "backend/sp600_tickers.txt"

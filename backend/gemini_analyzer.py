@@ -4,6 +4,16 @@ import os
 import json
 import time
 import config # Import the config file
+import sys # Import sys for exiting
+
+# --- API Key Validation ---
+if not config.GEMINI_API_KEY:
+    print("ERROR: GEMINI_API_KEY environment variable not set or found in config.", file=sys.stderr)
+    sys.exit(1) # Exit if key is missing
+if not config.BRAVE_API_KEY:
+    print("ERROR: BRAVE_API_KEY environment variable not set or found in config.", file=sys.stderr)
+    sys.exit(1) # Exit if key is missing
+# --------------------------
 
 # Configure Gemini
 try:

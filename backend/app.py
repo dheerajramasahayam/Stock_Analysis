@@ -4,6 +4,17 @@ import os
 import json # Import json module
 import database
 from datetime import datetime, timedelta
+from flask import Flask, jsonify, render_template, request
+import logging # Import logging
+from backend.log_setup import setup_logger # Import logger setup
+import config # Import config for log file path
+
+# --- Logger ---
+# Note: Gunicorn has its own logging, but we can add Flask-specific logs too.
+# For production with Gunicorn, configure Gunicorn's logging options instead of basicConfig.
+logger = setup_logger('web_app', config.LOG_FILE_WEB)
+# -------------
+
 
 app = Flask(__name__, template_folder='../frontend', static_folder='../frontend/static')
 
@@ -71,7 +82,7 @@ def get_highlighted_stocks():
         return jsonify(stocks_data)
 
     except Exception as e:
-        print(f"Error fetching highlighted stocks from DB: {e}")
+        logger.exception(f"Error fetching highlighted stocks from DB: {e}") # Log traceback
         if conn:
             conn.close()
         return jsonify({"error": "Failed to fetch stock data"}), 500
@@ -143,7 +154,7 @@ def get_stock_details(ticker):
         return jsonify(details)
 
     except Exception as e:
-        print(f"Error fetching details for {ticker} from DB: {e}")
+        logger.exception(f"Error fetching details for {ticker} from DB: {e}") # Log traceback
         if conn:
             conn.close()
         return jsonify({"error": f"Failed to fetch details for {ticker}"}), 500
@@ -173,7 +184,7 @@ def get_portfolio():
         conn.close()
         return jsonify(portfolio_data)
     except Exception as e:
-        print(f"Error fetching portfolio from DB: {e}")
+        logger.exception(f"Error fetching portfolio from DB: {e}") # Log traceback
         if conn: conn.close()
         return jsonify({"error": "Failed to fetch portfolio data"}), 500
 
@@ -219,7 +230,7 @@ def add_portfolio_holding():
         conn.close()
         return jsonify({"message": "Holding added successfully", "id": holding_id}), 201
     except Exception as e:
-        print(f"Error adding portfolio holding to DB: {e}")
+        logger.exception(f"Error adding portfolio holding to DB: {e}") # Log traceback
         if conn: conn.rollback(); conn.close()
         return jsonify({"error": "Failed to add portfolio holding"}), 500
 
@@ -247,7 +258,7 @@ def delete_portfolio_holding(holding_id):
 
         return jsonify({"message": "Holding deleted successfully"}), 200
     except Exception as e:
-        print(f"Error deleting portfolio holding {holding_id} from DB: {e}")
+        logger.exception(f"Error deleting portfolio holding {holding_id} from DB: {e}") # Log traceback
         if conn: conn.rollback(); conn.close()
         return jsonify({"error": "Failed to delete portfolio holding"}), 500
 

@@ -1,6 +1,5 @@
 import yfinance as yf
 import requests
-# from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer # No longer needed
 import sqlite3
 import database # To use get_db_connection
 import gemini_analyzer # Import the new module
@@ -8,23 +7,30 @@ from datetime import datetime, timedelta, date # Add date import
 import time
 import os
 import json # Import json module
+import sys # Import sys
 # Removed dotenv imports, as config.py now handles it
 import config # Import the config file
+from log_setup import setup_logger # Import logger setup
+
+# --- Logger ---
+logger = setup_logger('data_fetcher', config.LOG_FILE_FETCHER)
+# -------------
 
 # sentiment_analyzer = SentimentIntensityAnalyzer() # No longer needed
 
 def load_tickers_from_file(filename=config.TICKER_LIST_FILE): # Use config
     """Loads tickers from a file, one per line."""
+    logger.debug(f"Attempting to load tickers from: {filename}")
     try:
         with open(filename, 'r') as f:
             tickers = [line.strip() for line in f if line.strip()]
-        print(f"Loaded {len(tickers)} tickers from {filename}")
+        logger.info(f"Loaded {len(tickers)} tickers from {filename}")
         return tickers
     except FileNotFoundError:
-        print(f"Error: Ticker file not found at {filename}", file=sys.stderr)
+        logger.error(f"Ticker file not found at {filename}")
         return []
     except Exception as e:
-        print(f"Error reading ticker file {filename}: {e}", file=sys.stderr)
+        logger.exception(f"Error reading ticker file {filename}: {e}")
         return []
 
 def get_etf_holdings(etf_ticker):
@@ -33,7 +39,7 @@ def get_etf_holdings(etf_ticker):
     Requires implementation using a library or web scraping.
     Returns a list of tickers.
     """
-    print(f"TODO: Implement fetching holdings for {etf_ticker}")
+    logger.warning(f"Placeholder function get_etf_holdings called for {etf_ticker}, needs implementation.")
     # Example: return ['AAPL', 'MSFT', ...]
     return []
 
@@ -44,19 +50,18 @@ def update_company_list():
     """
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    print("Updating company list from file and applying filters...")
+    logger.info("Starting company list update and filtering...")
 
     source_tickers = load_tickers_from_file()
     if not source_tickers:
+        logger.error("No source tickers loaded from file.")
         conn.close()
         return []
 
     # --- Debugging ---
-    print(f"Debug: Type of source_tickers: {type(source_tickers)}")
+    logger.debug(f"Source tickers type: {type(source_tickers)}")
     if isinstance(source_tickers, list):
-        print(f"Debug: First 5 tickers loaded: {source_tickers[:5]}")
-    else:
-        print(f"Debug: source_tickers is not a list!")
+        logger.debug(f"First 5 source tickers: {source_tickers[:5]}")
     # --- End Debugging ---
 
     valid_tickers = set()
@@ -65,7 +70,7 @@ def update_company_list():
 
     for ticker in source_tickers:
         processed_count += 1
-        print(f"Processing ticker {processed_count}/{len(source_tickers)}: {ticker}")
+        logger.debug(f"Processing ticker {processed_count}/{len(source_tickers)}: {ticker}")
         try:
             stock = yf.Ticker(ticker)
             stock_info = stock.info
@@ -83,7 +88,7 @@ def update_company_list():
                 price_reason = f"below ${config.MIN_PRICE_FILTER:.2f}" if (current_price is not None and current_price < config.MIN_PRICE_FILTER) else f"above ${config.MAX_PRICE_FILTER:.2f}"
                 unavailable_reason = "unavailable" if current_price is None else ""
                 reason = unavailable_reason or price_reason
-                print(f"  Skipping {ticker}: Price ({current_price}) is {reason}.")
+                logger.info(f"Skipping {ticker} due to price filter: Price=({current_price}), Reason='{reason}'.")
                 skipped_count += 1
                 # Optional: Remove from DB if it exists but no longer qualifies
                 # cursor.execute("DELETE FROM companies WHERE ticker = ?", (ticker,))
@@ -97,11 +102,11 @@ def update_company_list():
 
             # Apply Sector Filter
             if sector not in config.ALLOWED_SECTORS:
-                print(f"  Skipping {ticker}: Sector '{sector}' not in allowed list {config.ALLOWED_SECTORS}.")
+                logger.info(f"Skipping {ticker} due to sector filter: Sector='{sector}'.")
                 skipped_count += 1
                 continue
 
-            print(f"  Adding/Updating: {ticker} - {name} (Sector: {sector}, Price: {current_price:.2f})")
+            logger.info(f"Adding/Updating company in DB: {ticker} - {name} (Sector: {sector}, Price: {current_price:.2f})")
             cursor.execute(
                 "INSERT OR REPLACE INTO companies (ticker, name, sector) VALUES (?, ?, ?)",
                 (ticker, name, sector)
@@ -110,7 +115,7 @@ def update_company_list():
             time.sleep(0.2) # Shorter delay as we filter more
 
         except Exception as e:
-            print(f"  Error processing {ticker}: {e}")
+            logger.exception(f"Error processing ticker {ticker} during company update: {e}") # Log traceback
             skipped_count += 1
 
     # Optional: Remove companies from DB that are no longer in the filtered list
@@ -124,7 +129,7 @@ def update_company_list():
 
     conn.commit()
     conn.close()
-    print(f"Company list update complete. Processed: {processed_count}, Added/Updated: {len(valid_tickers)}, Skipped (filter/error): {skipped_count}")
+    logger.info(f"Company list update complete. Processed: {processed_count}, Added/Updated: {len(valid_tickers)}, Skipped (filter/error): {skipped_count}")
     return sorted(list(valid_tickers))
 
 def fetch_price_history(ticker, period="6mo"): # Fetch 6 months history
@@ -132,110 +137,64 @@ def fetch_price_history(ticker, period="6mo"): # Fetch 6 months history
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period=period)
-        # Ensure columns exist
-        if 'Close' not in hist.columns or 'Volume' not in hist.columns:
-             print(f"Warning: Missing 'Close' or 'Volume' for {ticker}")
+        # Ensure columns exist (also fetch Open for next-day perf calc)
+        if not all(col in hist.columns for col in ['Open', 'Close', 'Volume']):
+             logger.warning(f"Missing required columns ('Open', 'Close', 'Volume') in history for {ticker}. Columns found: {list(hist.columns)}")
              return []
         prices = []
         for index, row in hist.iterrows():
             prices.append({
                 'date': index.strftime('%Y-%m-%d'),
+                'open_price': row['Open'], # Add Open price
                 'close_price': row['Close'],
                 'volume': int(row['Volume']) if row['Volume'] else 0
             })
         return prices
     except Exception as e:
-        print(f"Error fetching price history for {ticker}: {e}")
+        logger.exception(f"Error fetching price history for {ticker}: {e}") # Log traceback
         return []
 
 def fetch_news(ticker, company_name, days=3):
-    """Fetches news articles for a ticker using Brave Search API."""
-    query = f'"{company_name}" OR "{ticker}" stock news' # More specific query
-    print(f"  Brave search query: {query}")
-    headers = {
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip',
-        'X-Subscription-Token': BRAVE_API_KEY
-    }
-    params = {
-        'q': query,
-        # 'freshness': f'{days}d', # Removing freshness to broaden search
-        'text_decorations': 'false',
-        'spellcheck': 'false',
-        'country': 'us', # Explicitly add country
-        'search_lang': 'en', # Explicitly add language
-    }
-    try:
-        response = requests.get(BRAVE_SEARCH_ENDPOINT, headers=headers, params=params)
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-        data = response.json()
-        articles = []
-        results_found = False
-        if 'results' in data and data['results']:
-            for item in data['results']:
-                if item.get('type') == 'news':
-                    results_found = True
-                    article = item.get('news', {})
-                    meta = article.get('meta_url', {})
-                    articles.append({
-                        'url': article.get('url'),
-                        'title': article.get('title'),
-                        'snippet': article.get('snippet'),
-                        'published_date': article.get('date'), # Assuming Brave provides usable date string
-                        'source': meta.get('hostname')
-                    })
-        if not results_found:
-            print(f"  Brave API returned successfully but found 0 news results for {ticker}.")
-            # Consider logging data['query'] or other response parts for debugging
-            # print(f"  Brave API Response Data: {data}")
-        return articles
-    except requests.exceptions.RequestException as e:
-        print(f"  Error fetching news for {ticker} from Brave API (RequestException): {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"  Brave API Response Status: {e.response.status_code}")
-            try:
-                print(f"  Brave API Response Body: {e.response.json()}") # Try parsing as JSON
-            except requests.exceptions.JSONDecodeError:
-                print(f"  Brave API Response Body (non-JSON): {e.response.text}")
-        return []
-    except Exception as e:
-        # Catch other potential errors (e.g., JSON parsing if response is not JSON)
-        print(f"  Unexpected error processing Brave API response for {ticker}: {e}")
-        return []
+    """Fetches news articles for a ticker using Brave Search API. DEPRECATED."""
+    # This function is now effectively handled within gemini_analyzer.py
+    # Kept here for potential future direct use, but marked as deprecated/unused
+    logger.warning("Deprecated function fetch_news called; analysis should be handled by gemini_analyzer.")
+    return []
 
 
 def analyze_sentiment(text):
-    """Analyzes sentiment of a text snippet using VADER."""
-    if not text:
-        return 0.0
-    vs = sentiment_analyzer.polarity_scores(text)
-    return vs['compound'] # Compound score ranges from -1 (most negative) to +1 (most positive)
+    """Analyzes sentiment of a text snippet using VADER. DEPRECATED."""
+    # This function is no longer used as sentiment comes from Gemini
+    logger.warning("Deprecated function analyze_sentiment called.")
+    return 0.0
+
 
 def update_data_for_ticker(ticker):
     """Fetches and updates all data for a single ticker."""
-    print(f"--- Processing {ticker} ---")
+    logger.info(f"--- Starting data update for {ticker} ---")
     conn = database.get_db_connection()
     cursor = conn.cursor()
     now_iso = datetime.now().isoformat()
 
     # 1. Fetch and store price history
-    print(f"  Fetching price history for {ticker}...")
+    logger.debug(f"Fetching price history for {ticker}...")
     prices = fetch_price_history(ticker, period="6mo") # Fetch 6 months for charting/SMA
     if prices:
+        # Also add 'open_price' to the INSERT statement
         for price_data in prices:
             try:
                 cursor.execute(
-                    "INSERT OR REPLACE INTO price_history (ticker, date, close_price, volume) VALUES (?, ?, ?, ?)",
-                    (ticker, price_data['date'], price_data['close_price'], price_data['volume'])
+                    "INSERT OR REPLACE INTO price_history (ticker, date, open_price, close_price, volume) VALUES (?, ?, ?, ?, ?)",
+                    (ticker, price_data['date'], price_data['open_price'], price_data['close_price'], price_data['volume'])
                 )
             except sqlite3.IntegrityError:
-                 print(f"  Warning: Duplicate price data for {ticker} on {price_data['date']}")
+                 logger.warning(f"Duplicate price data for {ticker} on {price_data['date']}. Skipping insert.")
             except Exception as e:
-                 print(f"  Error inserting price data for {ticker} on {price_data['date']}: {e}")
+                 logger.exception(f"Error inserting price data for {ticker} on {price_data['date']}: {e}") # Log traceback
         conn.commit()
-        print(f"  Stored {len(prices)} price points for {ticker}.")
+        logger.info(f"Stored/Updated {len(prices)} price points for {ticker}.")
     else:
-        print(f"  No price history found or error fetching for {ticker}.")
+        logger.warning(f"No price history found or error fetching for {ticker}.")
 
 
     # Get company name from DB for Gemini analysis
@@ -279,33 +238,34 @@ def update_data_for_ticker(ticker):
             )
         )
         conn.commit()
-        print(f"  Stored Gemini analysis for {ticker}.")
+        logger.info(f"Stored Gemini analysis for {ticker} for date {analysis_date_str}.")
     except Exception as e:
-        print(f"  Error inserting Gemini analysis for {ticker}: {e}")
+        logger.exception(f"Error inserting Gemini analysis for {ticker} for date {analysis_date_str}: {e}") # Log full traceback
         conn.rollback() # Rollback on error
 
     conn.close()
-    print(f"--- Finished processing {ticker} ---")
+    logger.info(f"--- Finished data update for {ticker} ---")
     time.sleep(1) # Add delay between processing tickers
 
 def run_data_fetch_pipeline():
     """Runs the full data fetching and processing pipeline."""
-    print("Starting data fetch pipeline...")
-    print("Ensuring database schema is up-to-date...")
+    logger.info("=== Starting Full Data Fetch Pipeline ===")
+    logger.info("Ensuring database schema is up-to-date...")
     database.init_db() # Explicitly ensure DB schema exists before loading tickers
-    print("Database schema check complete.")
+    logger.info("Database schema check complete.")
 
     tickers_to_process = update_company_list()
 
     if not tickers_to_process:
-        print("No tickers found to process. Exiting.")
+        logger.warning("No tickers found to process after filtering. Exiting pipeline.")
         return
 
-    print(f"Processing data for {len(tickers_to_process)} tickers...")
-    for ticker in tickers_to_process:
+    logger.info(f"Beginning data update loop for {len(tickers_to_process)} tickers...")
+    for i, ticker in enumerate(tickers_to_process):
+        logger.info(f"--- Processing ticker {i+1}/{len(tickers_to_process)}: {ticker} ---")
         update_data_for_ticker(ticker)
 
-    print("Data fetch pipeline finished.")
+    logger.info("=== Full Data Fetch Pipeline Finished ===")
 
 if __name__ == '__main__':
     run_data_fetch_pipeline()

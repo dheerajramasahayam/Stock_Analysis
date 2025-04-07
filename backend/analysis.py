@@ -3,6 +3,13 @@ import pandas as pd
 import database # Import database module to get connection function
 from datetime import datetime, timedelta
 import numpy as np # For handling potential NaN/Inf
+import config # Import config for log file path
+from log_setup import setup_logger # Import logger setup
+import sys # Import sys
+
+# --- Logger ---
+logger = setup_logger('analysis', config.LOG_FILE_ANALYSIS)
+# -------------
 
 # Define score buckets for analysis
 SCORE_BUCKETS = [
@@ -27,7 +34,7 @@ def analyze_performance(days_history=30):
     Args:
         days_history (int): How many past days of scores to analyze.
     """
-    print(f"--- Analyzing Score Performance for the last {days_history} days ---")
+    logger.info(f"--- Starting Score Performance Analysis for the last {days_history} days ---")
     conn = database.get_db_connection()
     cursor = conn.cursor()
 
@@ -50,7 +57,7 @@ def analyze_performance(days_history=30):
         data = cursor.fetchall()
 
         if not data:
-            print("No score data with next-day performance found in the specified date range.")
+            logger.warning("No score data with next-day performance found in the specified date range.")
             conn.close()
             return
 
@@ -62,7 +69,7 @@ def analyze_performance(days_history=30):
         df.dropna(subset=['score', 'next_day_perf_pct'], inplace=True)
 
         if df.empty:
-            print("No valid score data with next-day performance found after cleaning.")
+            logger.warning("No valid score data with next-day performance found after cleaning.")
             conn.close()
             return
 
@@ -76,12 +83,13 @@ def analyze_performance(days_history=30):
             count=('score', 'size')
         )
 
-        print("\n--- Performance Analysis Results ---")
-        print(analysis)
-        print("------------------------------------")
+        logger.info("\n--- Performance Analysis Results ---")
+        # Log the DataFrame - consider logging analysis.to_string() for better formatting in logs
+        logger.info(f"\n{analysis.to_string()}")
+        logger.info("------------------------------------")
 
         # --- Store results in database ---
-        print("Storing analysis results in database...")
+        logger.info("Storing analysis results in database...")
         analysis_run_date = datetime.now().strftime('%Y-%m-%d')
         rows_to_insert = []
         # Reset index to access 'score_bucket' as a column
@@ -105,24 +113,21 @@ def analyze_performance(days_history=30):
                     VALUES (?, ?, ?, ?)
                 """, rows_to_insert)
                 conn.commit()
-                print(f"Successfully stored {len(rows_to_insert)} analysis results.")
+                logger.info(f"Successfully stored {len(rows_to_insert)} analysis results.")
             except Exception as db_e:
                 conn.rollback()
-                print(f"Error storing analysis results: {db_e}")
+                logger.exception(f"Error storing analysis results: {db_e}") # Log traceback
         else:
-            print("No analysis results generated to store.")
+            logger.warning("No analysis results generated to store.")
         # ---------------------------------
 
     except Exception as e:
-        print(f"An error occurred during analysis: {e}")
+        logger.exception(f"An error occurred during analysis: {e}") # Log traceback
     finally:
         if conn:
             conn.close()
 
 if __name__ == '__main__':
-    import sys
-    import config # Import config to get default days
-
     # Default to config value, allow override from command line
     default_days = config.ANALYSIS_HISTORY_DAYS
     days_to_analyze = default_days
@@ -131,14 +136,14 @@ if __name__ == '__main__':
         try:
             days_to_analyze = int(sys.argv[1])
             if days_to_analyze <= 0:
-                print("Error: days_history argument must be positive.", file=sys.stderr)
+                logger.error("days_history argument must be positive.")
                 sys.exit(1)
-            print(f"Using command line argument for history: {days_to_analyze} days.")
+            logger.info(f"Using command line argument for history: {days_to_analyze} days.")
         except ValueError:
-            print(f"Error: Invalid days_history argument '{sys.argv[1]}'. Using default: {default_days} days.", file=sys.stderr)
+            logger.error(f"Invalid days_history argument '{sys.argv[1]}'. Using default: {default_days} days.")
             days_to_analyze = default_days
     else:
-         print(f"Using default history: {default_days} days.")
+         logger.info(f"Using default history: {default_days} days.")
 
 
     analyze_performance(days_history=days_to_analyze)

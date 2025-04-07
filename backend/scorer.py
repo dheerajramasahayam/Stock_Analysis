@@ -41,11 +41,8 @@ def calculate_scores_for_date(target_date_str):
         return
 
     target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
-    # Fetch a larger window from DB to ensure enough data for calculations within pandas
-    # Fetch approx 100+ calendar days history ending a few days after target date
-    # Need enough history *before* target_date for longest indicator (MACD needs ~35 trading days, MA=50)
-    # Fetching 100 calendar days prior should be sufficient buffer
-    price_start_date_db_fetch = (target_date - timedelta(days=100)).strftime('%Y-%m-%d')
+    # Fetch a larger window from DB for calculations (MA200 needs ~250 calendar days)
+    price_start_date_db_fetch = (target_date - timedelta(days=250)).strftime('%Y-%m-%d')
     price_end_date_db_fetch = (target_date + timedelta(days=4)).strftime('%Y-%m-%d') # Look a few days ahead for next_day_open
 
     all_scores = []
@@ -60,6 +57,7 @@ def calculate_scores_for_date(target_date_str):
         pe_ratio = None
         dividend_yield = None
         price_vs_ma50_status = 'N/A' # Initialize MA status
+        price_vs_ma200_status = 'N/A' # Initialize MA200 status
         rsi_value = None # Initialize RSI value
         macd_signal_status = 'neutral' # Initialize MACD signal
         bbands_signal_status = 'neutral' # Initialize BBands signal
@@ -204,13 +202,38 @@ def calculate_scores_for_date(target_date_str):
                         price_vs_ma50_status = 'below'
                     score += ma_pts * config.WEIGHT_MA50
                 else:
-                    logger.warning(f"SMA calculation resulted in NaN for {ticker}.")
+                    logger.warning(f"SMA50 calculation resulted in NaN for {ticker}.")
                     price_vs_ma50_status = 'N/A'
                 score_details['ma50'] = {'value': price_vs_ma50_status, 'pts': ma_pts, 'weighted_pts': ma_pts * config.WEIGHT_MA50}
             else:
                  logger.warning(f"Not enough data ({len(df)} days) for {config.MA_PERIOD}-day SMA for {ticker}.")
                  price_vs_ma50_status = 'N/A'
                  score_details['ma50'] = {'value': price_vs_ma50_status, 'pts': 0, 'weighted_pts': 0}
+
+            # 200-day SMA
+            ma200_pts = 0
+            ma200_period = 200 # Define the period
+            if len(df) >= ma200_period:
+                df['SMA_200'] = df['close_price'].rolling(window=ma200_period).mean()
+                latest_price = df['close_price'].iloc[-1]
+                latest_sma200 = df['SMA_200'].iloc[-1]
+                if not pd.isna(latest_sma200):
+                    if latest_price > latest_sma200:
+                        ma200_pts = config.MA200_PRICE_ABOVE_PTS
+                        price_vs_ma200_status = 'above'
+                    elif latest_price < latest_sma200:
+                        ma200_pts = config.MA200_PRICE_BELOW_PTS
+                        price_vs_ma200_status = 'below'
+                    score += ma200_pts * config.WEIGHT_MA200 # Apply weight
+                else:
+                    logger.warning(f"SMA200 calculation resulted in NaN for {ticker}.")
+                    price_vs_ma200_status = 'N/A'
+                score_details['ma200'] = {'value': price_vs_ma200_status, 'pts': ma200_pts, 'weighted_pts': ma200_pts * config.WEIGHT_MA200}
+            else:
+                 logger.warning(f"Not enough data ({len(df)} days) for {ma200_period}-day SMA for {ticker}.")
+                 price_vs_ma200_status = 'N/A'
+                 score_details['ma200'] = {'value': price_vs_ma200_status, 'pts': 0, 'weighted_pts': 0}
+
 
             # RSI
             rsi_pts = 0
@@ -303,12 +326,14 @@ def calculate_scores_for_date(target_date_str):
             score_details['momentum'] = {'value': None, 'pts': config.PRICE_NEUTRAL_PTS, 'weighted_pts': config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM}
             score_details['volume'] = {'value': None, 'pts': config.VOLUME_NORMAL_PTS, 'weighted_pts': config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME}
             score_details['ma50'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
+            score_details['ma200'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0} # Add MA200 neutral
             score_details['rsi'] = {'value': None, 'pts': 0, 'weighted_pts': 0}
             score_details['macd'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
             score_details['bbands'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
             score += config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM
             score += config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME
             price_vs_ma50_status = 'N/A'
+            price_vs_ma200_status = 'N/A' # Ensure status is N/A
             macd_signal_status = 'N/A'
             bbands_signal_status = 'N/A'
 
@@ -370,8 +395,9 @@ def calculate_scores_for_date(target_date_str):
             macd_signal_status,
             bbands_signal_status,
             debt_to_equity,
-            pb_ratio, # Store P/B ratio
-            ps_ratio, # Store P/S ratio
+            pb_ratio,
+            ps_ratio,
+            price_vs_ma200_status, # Store MA200 status
             next_day_open,
             next_day_perf
         ))
@@ -380,9 +406,9 @@ def calculate_scores_for_date(target_date_str):
     try:
         cursor.executemany("""
             INSERT OR REPLACE INTO daily_scores
-            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity, pb_ratio, ps_ratio, next_day_open_price, next_day_perf_pct)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, all_scores) # Added ps_ratio and next day perf columns
+            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity, pb_ratio, ps_ratio, price_vs_ma200, next_day_open_price, next_day_perf_pct)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, all_scores) # Added price_vs_ma200 and next day perf columns
         conn.commit()
         logger.info(f"Successfully calculated and stored scores for {len(all_scores)} tickers.")
     except Exception as e:

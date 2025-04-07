@@ -83,6 +83,7 @@ def init_db():
             next_day_perf_pct REAL, -- Store performance (Close[D] -> Open[D+1]) %
             pb_ratio REAL, -- Add Price-to-Book ratio
             ps_ratio REAL, -- Add Price-to-Sales ratio
+            price_vs_ma200 TEXT, -- Add MA200 comparison ('above', 'below', 'N/A')
             PRIMARY KEY (ticker, date),
             FOREIGN KEY (ticker) REFERENCES companies (ticker)
         )
@@ -252,6 +253,17 @@ def init_db():
         if "duplicate column name" in str(e):
             print("ps_ratio column already exists.")
         else: raise e
+
+    # --- Add price_vs_ma200 column if it doesn't exist ---
+    try:
+        cursor.execute("ALTER TABLE daily_scores ADD COLUMN price_vs_ma200 TEXT")
+        print("Added price_vs_ma200 column to daily_scores table.")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            # Check if it already exists from MA50 addition (unlikely but safe)
+            print("price_vs_ma200 column already exists.")
+        else: raise e
+
 
     conn.commit()
     conn.close()

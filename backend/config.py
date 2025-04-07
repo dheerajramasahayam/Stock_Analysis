@@ -100,6 +100,10 @@ PS_RATIO_HIGH_THRESHOLD = 4.0 # Above this might be high (varies by industry)
 PS_RATIO_LOW_PTS = 1
 PS_RATIO_HIGH_PTS = -1
 
+# 200-day Moving Average (Price vs. MA200)
+MA200_PRICE_ABOVE_PTS = 1
+MA200_PRICE_BELOW_PTS = -1
+
 # --- Scoring Weights (Adjust to prioritize factors) ---
 WEIGHT_SENTIMENT = 1.0
 WEIGHT_MOMENTUM = 1.0
@@ -112,7 +116,8 @@ WEIGHT_MACD = 1.0
 WEIGHT_BBANDS = 1.0
 WEIGHT_DE_RATIO = 1.0
 WEIGHT_PB_RATIO = 1.0
-WEIGHT_PS_RATIO = 1.0 # Add weight for Price-to-Sales
+WEIGHT_PS_RATIO = 1.0
+WEIGHT_MA200 = 1.0 # Add weight for MA200 comparison
 
 # --- Portfolio ---
 PORTFOLIO_SELL_SCORE_THRESHOLD = -1 # Suggest selling if score drops below this

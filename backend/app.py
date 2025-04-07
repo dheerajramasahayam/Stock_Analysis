@@ -63,7 +63,8 @@ def get_highlighted_stocks():
                 ds.bbands_signal, -- Add BBands signal column
                 ds.debt_to_equity, -- Add Debt-to-Equity column
                 ds.pb_ratio, -- Add Price-to-Book column
-                ds.ps_ratio -- Add Price-to-Sales column
+                ds.ps_ratio, -- Add Price-to-Sales column
+                ds.price_vs_ma200 -- Add MA200 comparison column
             FROM daily_scores ds
             JOIN companies c ON ds.ticker = c.ticker
             WHERE ds.date = ?

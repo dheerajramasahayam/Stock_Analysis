@@ -58,8 +58,9 @@ def calculate_scores_for_date(target_date_str):
         rsi_value = None # Initialize RSI value
         macd_signal_status = 'neutral' # Initialize MACD signal
         bbands_signal_status = 'neutral' # Initialize BBands signal
+        debt_to_equity = None # Initialize D/E ratio
 
-        # --- Fetch Fundamental Data (P/E, Dividend Yield) ---
+        # --- Fetch Fundamental Data (P/E, Dividend Yield, D/E) ---
         # We need to fetch this fresh as it's not stored in price_history
         try:
             # Import yfinance and time here if not already imported globally
@@ -81,6 +82,14 @@ def calculate_scores_for_date(target_date_str):
             except (ValueError, TypeError):
                  print(f"  Warning: Could not convert Dividend Yield '{div_value}' to float for {ticker}.")
                  dividend_yield = None
+
+            # Fetch and convert Debt-to-Equity ratio
+            try:
+                de_value = stock_info.get('debtToEquity')
+                debt_to_equity = float(de_value) if de_value is not None else None
+            except (ValueError, TypeError):
+                 print(f"  Warning: Could not convert Debt-to-Equity '{de_value}' to float for {ticker}.")
+                 debt_to_equity = None
 
             time.sleep(0.2) # Small delay
         except Exception as e:
@@ -339,6 +348,19 @@ def calculate_scores_for_date(target_date_str):
         score += div_pts * config.WEIGHT_DIVIDEND # Apply weight
         score_details['dividend'] = {'value': dividend_yield, 'pts': div_pts, 'weighted_pts': div_pts * config.WEIGHT_DIVIDEND}
 
+        # 9. Score Debt-to-Equity Ratio
+        de_pts = 0
+        if debt_to_equity is not None:
+            if debt_to_equity < config.DE_RATIO_LOW_THRESHOLD and debt_to_equity >= 0: # Lower is better (must be non-negative)
+                de_pts = config.DE_RATIO_LOW_PTS
+            elif debt_to_equity > config.DE_RATIO_HIGH_THRESHOLD:
+                de_pts = config.DE_RATIO_HIGH_PTS
+            # else: neutral
+        # No points if unavailable
+        score += de_pts * config.WEIGHT_DE_RATIO # Apply weight
+        score_details['debt_equity'] = {'value': debt_to_equity, 'pts': de_pts, 'weighted_pts': de_pts * config.WEIGHT_DE_RATIO}
+
+
         # Log the final score and breakdown (now includes weighted points)
         logging.info(f"Scored {ticker} for {target_date_str}: Final Score={score}, Breakdown={score_details}")
 
@@ -355,16 +377,17 @@ def calculate_scores_for_date(target_date_str):
             price_vs_ma50_status, # Store MA status
             rsi_value, # Store RSI value
             macd_signal_status, # Store MACD signal
-            bbands_signal_status # Store BBands signal
+            bbands_signal_status, # Store BBands signal
+            debt_to_equity # Store D/E ratio
         ))
 
     # Insert all calculated scores into the database
     try:
         cursor.executemany("""
             INSERT OR REPLACE INTO daily_scores
-            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, all_scores) # Added bbands_signal
+            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, all_scores) # Added debt_to_equity
         conn.commit()
         print(f"Successfully calculated and stored scores for {len(all_scores)} tickers.")
     except Exception as e:

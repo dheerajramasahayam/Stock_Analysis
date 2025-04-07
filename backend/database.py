@@ -77,6 +77,7 @@ def init_db():
             rsi REAL, -- Add RSI value
             macd_signal TEXT, -- Add MACD signal ('bullish_cross', 'bearish_cross', 'neutral')
             bbands_signal TEXT, -- Add Bollinger Bands signal ('cross_lower', 'cross_upper', 'neutral')
+            debt_to_equity REAL, -- Add Debt-to-Equity ratio
             PRIMARY KEY (ticker, date),
             FOREIGN KEY (ticker) REFERENCES companies (ticker)
         )
@@ -180,6 +181,15 @@ def init_db():
     except sqlite3.OperationalError as e:
         if "duplicate column name" in str(e):
             print("bbands_signal column already exists.")
+        else: raise e
+
+    # --- Add debt_to_equity column if it doesn't exist ---
+    try:
+        cursor.execute("ALTER TABLE daily_scores ADD COLUMN debt_to_equity REAL")
+        print("Added debt_to_equity column to daily_scores table.")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            print("debt_to_equity column already exists.")
         else: raise e
 
     conn.commit()

@@ -78,6 +78,8 @@ def init_db():
             macd_signal TEXT, -- Add MACD signal ('bullish_cross', 'bearish_cross', 'neutral')
             bbands_signal TEXT, -- Add Bollinger Bands signal ('cross_lower', 'cross_upper', 'neutral')
             debt_to_equity REAL, -- Add Debt-to-Equity ratio
+            next_day_open_price REAL, -- Store next day's open price for comparison
+            next_day_perf_pct REAL, -- Store performance (Close[D] -> Open[D+1]) %
             PRIMARY KEY (ticker, date),
             FOREIGN KEY (ticker) REFERENCES companies (ticker)
         )
@@ -190,6 +192,24 @@ def init_db():
     except sqlite3.OperationalError as e:
         if "duplicate column name" in str(e):
             print("debt_to_equity column already exists.")
+        else: raise e
+
+    # --- Add next_day_open_price column if it doesn't exist ---
+    try:
+        cursor.execute("ALTER TABLE daily_scores ADD COLUMN next_day_open_price REAL")
+        print("Added next_day_open_price column to daily_scores table.")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            print("next_day_open_price column already exists.")
+        else: raise e
+
+    # --- Add next_day_perf_pct column if it doesn't exist ---
+    try:
+        cursor.execute("ALTER TABLE daily_scores ADD COLUMN next_day_perf_pct REAL")
+        print("Added next_day_perf_pct column to daily_scores table.")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            print("next_day_perf_pct column already exists.")
         else: raise e
 
     conn.commit()

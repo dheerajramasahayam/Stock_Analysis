@@ -59,6 +59,8 @@ def calculate_scores_for_date(target_date_str):
         macd_signal_status = 'neutral' # Initialize MACD signal
         bbands_signal_status = 'neutral' # Initialize BBands signal
         debt_to_equity = None # Initialize D/E ratio
+        next_day_open = None # Initialize next day open
+        next_day_perf = None # Initialize next day performance %
 
         # --- Fetch Fundamental Data (P/E, Dividend Yield, D/E) ---
         # We need to fetch this fresh as it's not stored in price_history
@@ -119,16 +121,31 @@ def calculate_scores_for_date(target_date_str):
         score += sentiment_pts * config.WEIGHT_SENTIMENT # Apply weight
         score_details['sentiment'] = {'value': gemini_sentiment, 'pts': sentiment_pts, 'weighted_pts': sentiment_pts * config.WEIGHT_SENTIMENT}
 
-        # 2. Calculate Price Momentum & Volume Ratio (Keep this logic)
+        # 2. Fetch Price History (including one day after target_date for performance calc)
+        next_day_date = (target_date + timedelta(days=1)).strftime('%Y-%m-%d')
+        # Adjust fetch range slightly to ensure we get D+1 if it exists
+        price_end_date_db_fetch = (target_date + timedelta(days=4)).strftime('%Y-%m-%d') # Look a few days ahead
+
         cursor.execute("""
-            SELECT date, close_price, volume
+            SELECT date, close_price, volume, open_price -- Fetch Open price too
             FROM price_history
             WHERE ticker = ? AND date >= ? AND date <= ?
             ORDER BY date ASC
-        """, (ticker, price_start_date_db_fetch, target_date_str)) # Use wider fetch date range
+        """, (ticker, price_start_date_db_fetch, price_end_date_db_fetch)) # Use wider fetch date range
         price_rows = cursor.fetchall()
 
-        # Now perform calculations if we have *at least* the minimum days needed for momentum
+        # Create DataFrame
+        if price_rows:
+            df_full = pd.DataFrame(price_rows, columns=['date', 'close_price', 'volume', 'open_price'])
+            df_full['date'] = pd.to_datetime(df_full['date'])
+            df_full = df_full.set_index('date')
+
+            # Filter DataFrame to only include data up to the target_date for scoring calculations
+            df = df_full.loc[df_full.index <= target_date_str].copy()
+        else:
+            df = pd.DataFrame() # Empty DataFrame if no history
+
+        # Now perform calculations if we have *at least* the minimum days needed for momentum in df
         if len(price_rows) >= config.PRICE_MOMENTUM_DAYS:
             # Use pandas for easier calculation
             df = pd.DataFrame(price_rows, columns=['date', 'close_price', 'volume'])
@@ -309,6 +326,19 @@ def calculate_scores_for_date(target_date_str):
                 bbands_signal_status = 'N/A'
             score_details['bbands'] = {'value': bbands_signal_status, 'pts': bbands_pts, 'weighted_pts': bbands_pts * config.WEIGHT_BBANDS}
 
+            # 7. Calculate Next Day Performance
+            # Find the next trading day's data in the full history
+            next_day_data = df_full.loc[df_full.index > target_date_str]
+            if not next_day_data.empty:
+                next_day_open = next_day_data['open_price'].iloc[0]
+                current_close = df['close_price'].iloc[-1] # Close price on target_date
+                if current_close and next_day_open and current_close > 0:
+                    next_day_perf = ((next_day_open - current_close) / current_close) * 100
+                else:
+                    logging.warning(f"Could not calculate next day perf for {ticker} on {target_date_str} due to missing/zero prices.")
+            else:
+                logging.warning(f"No price data found for {ticker} after {target_date_str} to calculate next day performance.")
+
 
         else:
             logging.warning(f"Not enough price history data for {ticker} to calculate momentum/volume/MA/RSI/MACD/BBands.")
@@ -319,14 +349,15 @@ def calculate_scores_for_date(target_date_str):
             score_details['ma50'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
             score_details['rsi'] = {'value': None, 'pts': 0, 'weighted_pts': 0}
             score_details['macd'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
-            score_details['bbands'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0} # Add BBands neutral
+            score_details['bbands'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
+            # Next day perf is not scored, just recorded
             score += config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM # Apply weight
             score += config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME # Apply weight
             price_vs_ma50_status = 'N/A' # Ensure status is N/A
             macd_signal_status = 'N/A' # Ensure status is N/A
             bbands_signal_status = 'N/A' # Ensure status is N/A
 
-        # 8. Score P/E Ratio
+        # 9. Score P/E Ratio
         if pe_ratio is not None:
             pe_pts = 0
             if pe_ratio < config.PE_LOW_THRESHOLD and pe_ratio > 0: # Use config & Ensure P/E is positive
@@ -340,7 +371,7 @@ def calculate_scores_for_date(target_date_str):
         score += pe_pts * config.WEIGHT_PE_RATIO # Apply weight
         score_details['pe_ratio'] = {'value': pe_ratio, 'pts': pe_pts, 'weighted_pts': pe_pts * config.WEIGHT_PE_RATIO}
 
-        # 9. Score Dividend Yield
+        # 10. Score Dividend Yield
         div_pts = 0
         if dividend_yield is not None and dividend_yield > config.DIV_YIELD_THRESHOLD: # Use config
             div_pts = config.DIV_YIELD_PTS # Use config
@@ -348,7 +379,7 @@ def calculate_scores_for_date(target_date_str):
         score += div_pts * config.WEIGHT_DIVIDEND # Apply weight
         score_details['dividend'] = {'value': dividend_yield, 'pts': div_pts, 'weighted_pts': div_pts * config.WEIGHT_DIVIDEND}
 
-        # 9. Score Debt-to-Equity Ratio
+        # 11. Score Debt-to-Equity Ratio
         de_pts = 0
         if debt_to_equity is not None:
             if debt_to_equity < config.DE_RATIO_LOW_THRESHOLD and debt_to_equity >= 0: # Lower is better (must be non-negative)
@@ -378,16 +409,18 @@ def calculate_scores_for_date(target_date_str):
             rsi_value, # Store RSI value
             macd_signal_status, # Store MACD signal
             bbands_signal_status, # Store BBands signal
-            debt_to_equity # Store D/E ratio
+            debt_to_equity, # Store D/E ratio
+            next_day_open, # Store next day open
+            next_day_perf # Store next day performance %
         ))
 
     # Insert all calculated scores into the database
     try:
         cursor.executemany("""
             INSERT OR REPLACE INTO daily_scores
-            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, all_scores) # Added debt_to_equity
+            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity, next_day_open_price, next_day_perf_pct)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, all_scores) # Added next day perf columns
         conn.commit()
         print(f"Successfully calculated and stored scores for {len(all_scores)} tickers.")
     except Exception as e:

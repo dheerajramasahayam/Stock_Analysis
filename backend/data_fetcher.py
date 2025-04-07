@@ -7,6 +7,7 @@ import gemini_analyzer # Import the new module
 from datetime import datetime, timedelta, date # Add date import
 import time
 import os
+import json # Import json module
 # Removed dotenv imports, as config.py now handles it
 import config # Import the config file
 

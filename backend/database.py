@@ -55,6 +55,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS price_history (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL, -- Store as YYYY-MM-DD
+            open_price REAL, -- Added Open Price
             close_price REAL NOT NULL,
             volume INTEGER,
             PRIMARY KEY (ticker, date),
@@ -100,6 +101,15 @@ def init_db():
             FOREIGN KEY (ticker) REFERENCES companies (ticker)
         )
     ''')
+
+    # --- Add open_price column to price_history if it doesn't exist ---
+    try:
+        cursor.execute("ALTER TABLE price_history ADD COLUMN open_price REAL")
+        print("Added open_price column to price_history table.")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            print("open_price column already exists in price_history.")
+        else: raise e
 
     # Performance Analysis Table
     cursor.execute('''

@@ -51,6 +51,9 @@ else
     git pull || exit 1
 fi
 
+# --- Create Log Directory ---
+mkdir -p logs # Ensure the logs directory exists
+
 # --- Install/Update Dependencies (User-wide) ---
 echo "Installing/Updating Python dependencies for user..."
 $PYTHON_VERSION -m pip install --upgrade pip

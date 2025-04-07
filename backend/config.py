@@ -93,6 +93,12 @@ PB_RATIO_HIGH_THRESHOLD = 3.0 # Above this might be high (varies by industry)
 PB_RATIO_LOW_PTS = 1
 PB_RATIO_HIGH_PTS = -1
 
+# Price-to-Sales (P/S) Ratio
+PS_RATIO_LOW_THRESHOLD = 1.0 # Below this is generally good
+PS_RATIO_HIGH_THRESHOLD = 4.0 # Above this might be high (varies by industry)
+PS_RATIO_LOW_PTS = 1
+PS_RATIO_HIGH_PTS = -1
+
 # --- Scoring Weights (Adjust to prioritize factors) ---
 WEIGHT_SENTIMENT = 1.0
 WEIGHT_MOMENTUM = 1.0
@@ -104,7 +110,8 @@ WEIGHT_RSI = 1.0
 WEIGHT_MACD = 1.0
 WEIGHT_BBANDS = 1.0
 WEIGHT_DE_RATIO = 1.0
-WEIGHT_PB_RATIO = 1.0 # Add weight for Price-to-Book
+WEIGHT_PB_RATIO = 1.0
+WEIGHT_PS_RATIO = 1.0 # Add weight for Price-to-Sales
 
 # --- Portfolio ---
 PORTFOLIO_SELL_SCORE_THRESHOLD = -1 # Suggest selling if score drops below this

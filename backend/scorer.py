@@ -65,10 +65,11 @@ def calculate_scores_for_date(target_date_str):
         bbands_signal_status = 'neutral' # Initialize BBands signal
         debt_to_equity = None # Initialize D/E ratio
         pb_ratio = None # Initialize P/B ratio
+        ps_ratio = None # Initialize P/S ratio
         next_day_open = None # Initialize next day open
         next_day_perf = None # Initialize next day performance %
 
-        # --- Fetch Fundamental Data (P/E, Dividend Yield, D/E, P/B) ---
+        # --- Fetch Fundamental Data (P/E, Dividend Yield, D/E, P/B, P/S) ---
         try:
             import yfinance as yf
             import time
@@ -105,6 +106,13 @@ def calculate_scores_for_date(target_date_str):
             except (ValueError, TypeError):
                  logger.warning(f"Could not convert Price-to-Book '{pb_value}' to float for {ticker}.")
                  pb_ratio = None
+            # Fetch and convert Price-to-Sales ratio
+            try:
+                ps_value = stock_info.get('priceToSalesTrailing12Months')
+                ps_ratio = float(ps_value) if ps_value is not None else None
+            except (ValueError, TypeError):
+                 logger.warning(f"Could not convert Price-to-Sales '{ps_value}' to float for {ticker}.")
+                 ps_ratio = None
 
             time.sleep(0.2) # Small delay
         except Exception as e:
@@ -335,6 +343,14 @@ def calculate_scores_for_date(target_date_str):
         score += pb_pts * config.WEIGHT_PB_RATIO
         score_details['pb_ratio'] = {'value': pb_ratio, 'pts': pb_pts, 'weighted_pts': pb_pts * config.WEIGHT_PB_RATIO}
 
+        # Score Price-to-Sales Ratio
+        ps_pts = 0 # Default
+        if ps_ratio is not None:
+             if ps_ratio < config.PS_RATIO_LOW_THRESHOLD and ps_ratio > 0: ps_pts = config.PS_RATIO_LOW_PTS
+             elif ps_ratio > config.PS_RATIO_HIGH_THRESHOLD: ps_pts = config.PS_RATIO_HIGH_PTS
+        score += ps_pts * config.WEIGHT_PS_RATIO
+        score_details['ps_ratio'] = {'value': ps_ratio, 'pts': ps_pts, 'weighted_pts': ps_pts * config.WEIGHT_PS_RATIO}
+
 
         # Log the final score and breakdown
         logger.info(f"Scored {ticker} for {target_date_str}: Final Score={score:.2f}, Breakdown={score_details}")
@@ -355,6 +371,7 @@ def calculate_scores_for_date(target_date_str):
             bbands_signal_status,
             debt_to_equity,
             pb_ratio, # Store P/B ratio
+            ps_ratio, # Store P/S ratio
             next_day_open,
             next_day_perf
         ))
@@ -363,9 +380,9 @@ def calculate_scores_for_date(target_date_str):
     try:
         cursor.executemany("""
             INSERT OR REPLACE INTO daily_scores
-            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity, pb_ratio, next_day_open_price, next_day_perf_pct)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, all_scores) # Added pb_ratio and next day perf columns
+            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity, pb_ratio, ps_ratio, next_day_open_price, next_day_perf_pct)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, all_scores) # Added ps_ratio and next day perf columns
         conn.commit()
         logger.info(f"Successfully calculated and stored scores for {len(all_scores)} tickers.")
     except Exception as e:

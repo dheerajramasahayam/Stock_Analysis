@@ -105,3 +105,12 @@ SCHEDULE_TIME = "19:00" # Time to run daily (e.g., 7:00 PM)
 
 # --- API Endpoints ---
 BRAVE_SEARCH_ENDPOINT = 'https://api.search.brave.com/res/v1/web/search' # Using WEB Search endpoint
+
+# --- Logging ---
+LOG_FILE_SCHEDULER = "logs/scheduler.log"
+LOG_FILE_FETCHER = "logs/fetcher.log"
+LOG_FILE_SCORER = "logs/scorer.log"
+LOG_FILE_ANALYSIS = "logs/analysis.log"
+LOG_FILE_WEB = "logs/web.log" # For Flask/Gunicorn logs
+LOG_MAX_BYTES = 10 * 1024 * 1024 # 10 MB
+LOG_BACKUP_COUNT = 5

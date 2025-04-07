@@ -266,3 +266,125 @@ def delete_portfolio_holding(holding_id):
 if __name__ == '__main__':
     # Note: Use 'flask run' in development, or a proper WSGI server in production
     app.run(debug=True)
+
+
+# --- Admin Interface Endpoints ---
+import subprocess
+import config # Re-import for log paths
+import re
+
+def get_last_log_entry_info(log_file_path):
+    """Helper to get timestamp and status from the last relevant log entry."""
+    try:
+        # Use absolute path
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        absolute_log_path = os.path.join(project_root, log_file_path)
+
+        if not os.path.exists(absolute_log_path):
+            return None, "Log file not found"
+
+        # Read last few lines to find start/finish/error markers
+        num_lines_to_check = 50
+        with open(absolute_log_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()[-num_lines_to_check:]
+
+        last_status = "Unknown"
+        last_timestamp = None
+        # Search backwards for the most recent status indicator
+        for line in reversed(lines):
+            timestamp_match = re.match(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})', line)
+            if timestamp_match:
+                current_timestamp = timestamp_match.group(1)
+                if "=== Starting" in line or "--- Running script" in line:
+                    if last_timestamp is None: # Only update if we haven't found a finish/error yet
+                       last_status = "Running/Incomplete"
+                       last_timestamp = current_timestamp
+                elif "successfully at" in line or "=== Finished" in line:
+                    last_status = "Success"
+                    last_timestamp = current_timestamp
+                    break # Found the latest completion status
+                elif "failed with return code" in line or "!!! An unexpected error occurred" in line:
+                    last_status = "Failed"
+                    last_timestamp = current_timestamp
+                    break # Found the latest completion status
+
+        return last_timestamp, last_status
+
+    except Exception as e:
+        logger.error(f"Error reading log file {log_file_path}: {e}")
+        return None, "Error reading log"
+
+
+@app.route('/admin')
+def admin_page():
+    """Serves the admin HTML page."""
+    return render_template('admin.html')
+
+@app.route('/api/admin/status')
+def get_admin_status():
+    """API endpoint to get status of services and last job runs."""
+    status_data = {"timestamp": datetime.now().isoformat()}
+
+    # Check systemd service status (simple check if active)
+    try:
+        web_status = subprocess.run(['systemctl', 'is-active', 'stockapp-web.service'], capture_output=True, text=True)
+        status_data['web_service_active'] = web_status.stdout.strip() == 'active'
+    except Exception as e:
+        logger.warning(f"Could not check systemd status for stockapp-web.service: {e}")
+        status_data['web_service_active'] = None # Indicate unknown
+
+    try:
+        scheduler_status = subprocess.run(['systemctl', 'is-active', 'stockapp-scheduler.service'], capture_output=True, text=True)
+        status_data['scheduler_service_active'] = scheduler_status.stdout.strip() == 'active'
+    except Exception as e:
+        logger.warning(f"Could not check systemd status for stockapp-scheduler.service: {e}")
+        status_data['scheduler_service_active'] = None # Indicate unknown
+
+    # Get last run info from logs
+    status_data['last_fetcher_run'], status_data['last_fetcher_status'] = get_last_log_entry_info(config.LOG_FILE_FETCHER)
+    status_data['last_scorer_run'], status_data['last_scorer_status'] = get_last_log_entry_info(config.LOG_FILE_SCORER)
+    status_data['last_analysis_run'], status_data['last_analysis_status'] = get_last_log_entry_info(config.LOG_FILE_ANALYSIS)
+
+    return jsonify(status_data)
+
+
+@app.route('/api/admin/logs/<log_type>')
+def get_logs(log_type):
+    """API endpoint to retrieve recent log file content."""
+    log_files = {
+        "web": config.LOG_FILE_WEB,
+        "scheduler": config.LOG_FILE_SCHEDULER,
+        "fetcher": config.LOG_FILE_FETCHER,
+        "scorer": config.LOG_FILE_SCORER,
+        "analysis": config.LOG_FILE_ANALYSIS,
+    }
+
+    if log_type not in log_files:
+        return jsonify({"error": "Invalid log type specified"}), 400
+
+    log_file_path = log_files[log_type]
+    try:
+        lines = int(request.args.get('lines', 100)) # Get number of lines from query param
+        lines = max(10, min(lines, 1000)) # Clamp lines between 10 and 1000
+    except ValueError:
+        lines = 100
+
+    try:
+        # Use absolute path
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        absolute_log_path = os.path.join(project_root, log_file_path)
+
+        if not os.path.exists(absolute_log_path):
+            return jsonify({"log_content": f"Log file not found: {log_file_path}"}), 404
+
+        # Use tail command for efficiency
+        process = subprocess.run(['tail', '-n', str(lines), absolute_log_path], capture_output=True, text=True, check=True)
+        log_content = process.stdout
+        return jsonify({"log_content": log_content})
+
+    except subprocess.CalledProcessError as e:
+         logger.error(f"Error running tail command for {log_file_path}: {e}")
+         return jsonify({"error": f"Failed to read log file using tail: {e.stderr}"}), 500
+    except Exception as e:
+        logger.exception(f"Error reading log file {log_file_path}: {e}")
+        return jsonify({"error": "Failed to read log file"}), 500

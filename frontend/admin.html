@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Analyzer - Admin</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body { padding: 20px; }
+        .log-output {
+            background-color: #222;
+            color: #eee;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        .status-item {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .status-item strong { display: inline-block; min-width: 150px;}
+        .status-ok { color: green; }
+        .status-error { color: red; }
+        button { margin-right: 10px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Admin Interface</h1>
+    <p><a href="/">Back to Dashboard</a></p>
+
+    <section id="job-status">
+        <h2>Job Status</h2>
+        <button id="refresh-status">Refresh Status</button>
+        <div id="status-content">Loading status...</div>
+    </section>
+
+    <section id="logs">
+        <h2>View Logs</h2>
+        <label for="log-file-select">Select Log File:</label>
+        <select id="log-file-select">
+            <option value="web">Web App (web.log)</option>
+            <option value="scheduler">Scheduler (scheduler.log)</option>
+            <option value="fetcher">Data Fetcher (fetcher.log)</option>
+            <option value="scorer">Scorer (scorer.log)</option>
+            <option value="analysis">Analysis (analysis.log)</option>
+        </select>
+        <label for="log-lines">Lines:</label>
+        <input type="number" id="log-lines" value="100" min="10" max="1000">
+        <button id="view-log">View Log</button>
+        <pre id="log-output" class="log-output">Select a log file and click 'View Log'.</pre>
+    </section>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const statusContent = document.getElementById('status-content');
+            const refreshStatusBtn = document.getElementById('refresh-status');
+            const logFileSelect = document.getElementById('log-file-select');
+            const logLinesInput = document.getElementById('log-lines');
+            const viewLogBtn = document.getElementById('view-log');
+            const logOutputPre = document.getElementById('log-output');
+
+            async function fetchStatus() {
+                statusContent.textContent = 'Loading status...';
+                try {
+                    const response = await fetch('/api/admin/status');
+                    if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                    const data = await response.json();
+                    renderStatus(data);
+                } catch (error) {
+                    console.error("Error fetching status:", error);
+                    statusContent.textContent = `Error loading status: ${error.message}`;
+                }
+            }
+
+            function renderStatus(data) {
+                statusContent.innerHTML = `
+                    <div class="status-item">
+                        <strong>Web Service (systemd):</strong>
+                        <span class="${data.web_service_active ? 'status-ok' : 'status-error'}">
+                            ${data.web_service_active ? 'Active' : 'Inactive/Error'}
+                        </span>
+                        (Last checked: ${new Date(data.timestamp).toLocaleString()})
+                    </div>
+                    <div class="status-item">
+                        <strong>Scheduler Service (systemd):</strong>
+                        <span class="${data.scheduler_service_active ? 'status-ok' : 'status-error'}">
+                            ${data.scheduler_service_active ? 'Active' : 'Inactive/Error'}
+                        </span>
+                         (Last checked: ${new Date(data.timestamp).toLocaleString()})
+                    </div>
+                    <div class="status-item">
+                        <strong>Last Fetcher Run:</strong> ${data.last_fetcher_run || 'N/A'} (${data.last_fetcher_status || 'N/A'})
+                    </div>
+                     <div class="status-item">
+                        <strong>Last Scorer Run:</strong> ${data.last_scorer_run || 'N/A'} (${data.last_scorer_status || 'N/A'})
+                    </div>
+                     <div class="status-item">
+                        <strong>Last Analysis Run:</strong> ${data.last_analysis_run || 'N/A'} (${data.last_analysis_status || 'N/A'})
+                    </div>
+                `;
+            }
+
+            async function fetchLogs() {
+                const logType = logFileSelect.value;
+                const lines = logLinesInput.value || 100;
+                logOutputPre.textContent = `Loading last ${lines} lines of ${logType}.log...`;
+                try {
+                    const response = await fetch(`/api/admin/logs/${logType}?lines=${lines}`);
+                    if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                    const data = await response.json();
+                    logOutputPre.textContent = data.log_content || `No content found for ${logType}.log`;
+                } catch (error) {
+                     console.error("Error fetching logs:", error);
+                    logOutputPre.textContent = `Error loading logs: ${error.message}`;
+                }
+            }
+
+            refreshStatusBtn.addEventListener('click', fetchStatus);
+            viewLogBtn.addEventListener('click', fetchLogs);
+
+            // Initial load
+            fetchStatus();
+        });
+    </script>
+</body>
+</html>

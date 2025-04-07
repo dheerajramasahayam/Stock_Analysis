@@ -20,7 +20,8 @@ GEMINI_MODEL_NAME = os.getenv('GEMINI_MODEL_NAME', 'gemini-1.5-flash-latest') # 
 # --- Data Fetching ---
 # Use absolute path based on project root
 PROJECT_ROOT = os.path.dirname(dotenv_path) # dotenv_path is root/.env
-TICKER_LIST_FILE = os.path.join(PROJECT_ROOT, "backend", "sp600_tickers.txt")
+TICKER_LIST_FILE = os.path.join(PROJECT_ROOT, "backend", "sp600_tickers.txt") # Original
+# TICKER_LIST_FILE = os.path.join(PROJECT_ROOT, "backend", "sp600_tickers_test.txt") # Using test file
 MIN_PRICE_FILTER = 1.00 # Exclude stocks below $1.00
 MAX_PRICE_FILTER = 50.00 # Exclude stocks above $50.00
 ALLOWED_SECTORS = ["Technology", "Healthcare", "Industrials"] # Filter for these sectors (Note: Using Industrials instead of Defense as yfinance often uses broader categories)

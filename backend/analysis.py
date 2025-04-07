@@ -87,5 +87,25 @@ def analyze_performance(days_history=30):
             conn.close()
 
 if __name__ == '__main__':
-    # Example: Analyze the last 30 days of data
-    analyze_performance(days_history=30)
+    import sys
+    import config # Import config to get default days
+
+    # Default to config value, allow override from command line
+    default_days = config.ANALYSIS_HISTORY_DAYS
+    days_to_analyze = default_days
+
+    if len(sys.argv) > 1:
+        try:
+            days_to_analyze = int(sys.argv[1])
+            if days_to_analyze <= 0:
+                print("Error: days_history argument must be positive.", file=sys.stderr)
+                sys.exit(1)
+            print(f"Using command line argument for history: {days_to_analyze} days.")
+        except ValueError:
+            print(f"Error: Invalid days_history argument '{sys.argv[1]}'. Using default: {default_days} days.", file=sys.stderr)
+            days_to_analyze = default_days
+    else:
+         print(f"Using default history: {default_days} days.")
+
+
+    analyze_performance(days_history=days_to_analyze)

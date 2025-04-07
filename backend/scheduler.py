@@ -8,9 +8,11 @@ import os
 import config # Import the config file
 
 # --- Configuration ---
-PYTHON_EXECUTABLE = "backend/venv/bin/python" # Path to venv python - Keep this or make configurable?
+PYTHON_EXECUTABLE = "/usr/bin/python3" # Use the system python used for user install
 DATA_FETCHER_SCRIPT = "backend/data_fetcher.py"
 SCORER_SCRIPT = "backend/scorer.py"
+ANALYSIS_SCRIPT = "backend/analysis.py"
+ANALYSIS_HISTORY_DAYS = 90 # Analyze last 90 days of performance
 # SCHEDULE_TIME = "19:00" # Use from config
 # --------------------
 
@@ -82,9 +84,24 @@ def daily_job():
 
     print(f"Daily job finished at {datetime.now()}.")
 
-# --- Schedule the Job ---
-print(f"Scheduling daily job to run at {config.SCHEDULE_TIME}...") # Use config
-schedule.every().day.at(config.SCHEDULE_TIME).do(daily_job) # Use config
+
+def weekly_analysis_job():
+    """Runs the performance analysis script."""
+    print(f"Starting weekly analysis job at {datetime.now()}...")
+    # Pass days from config as argument
+    run_script(f"{ANALYSIS_SCRIPT} {ANALYSIS_HISTORY_DAYS}")
+    print(f"Weekly analysis job finished at {datetime.now()}.")
+
+
+# --- Schedule the Jobs ---
+print(f"Scheduling daily data/scoring job to run at {config.SCHEDULE_TIME}...")
+schedule.every().day.at(config.SCHEDULE_TIME).do(daily_job)
+
+# Schedule analysis job (e.g., every Sunday at 8 PM, after daily job)
+analysis_time = (datetime.strptime(config.SCHEDULE_TIME, "%H:%M") + timedelta(hours=1)).strftime("%H:%M")
+print(f"Scheduling weekly analysis job to run every Sunday at {analysis_time}...")
+schedule.every().sunday.at(analysis_time).do(weekly_analysis_job)
+
 
 # --- Run Initial Job Immediately (Optional) ---
 # print("Running initial job now...")

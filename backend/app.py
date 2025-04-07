@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, render_template, request
 # Removed dotenv imports, as config.py now handles it
 import os
+import json # Import json module
 import database
 from datetime import datetime, timedelta
 

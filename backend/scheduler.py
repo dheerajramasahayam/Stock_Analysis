@@ -82,25 +82,39 @@ def daily_job():
         print(f"!!! An unexpected error occurred while running {SCORER_SCRIPT}: {e} !!!", file=sys.stderr)
 
 
+    # 3. Run the performance analysis
+    print("Step 3: Running performance analysis...")
+    try:
+        # Pass days from config as argument
+        analysis_command = [PYTHON_EXECUTABLE, ANALYSIS_SCRIPT, str(ANALYSIS_HISTORY_DAYS)]
+        print(f"--- Running command: {' '.join(analysis_command)} at {datetime.now()} ---")
+        process = subprocess.run(
+            analysis_command,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        print(f"--- Script {ANALYSIS_SCRIPT} Output ---")
+        print(process.stdout)
+        if process.stderr:
+            print(f"--- Script {ANALYSIS_SCRIPT} Errors ---", file=sys.stderr)
+            print(process.stderr, file=sys.stderr)
+        print(f"--- Finished script: {ANALYSIS_SCRIPT} at {datetime.now()} ---")
+    except subprocess.CalledProcessError as e:
+        print(f"!!! Script {ANALYSIS_SCRIPT} failed with return code {e.returncode} !!!", file=sys.stderr)
+        print(f"--- Error Output ---", file=sys.stderr)
+        print(e.stderr, file=sys.stderr)
+        print(f"--- Standard Output ---", file=sys.stderr)
+    except Exception as e:
+        print(f"!!! An unexpected error occurred while running {ANALYSIS_SCRIPT}: {e} !!!", file=sys.stderr)
+
+
     print(f"Daily job finished at {datetime.now()}.")
 
 
-def weekly_analysis_job():
-    """Runs the performance analysis script."""
-    print(f"Starting weekly analysis job at {datetime.now()}...")
-    # Pass days from config as argument
-    run_script(f"{ANALYSIS_SCRIPT} {ANALYSIS_HISTORY_DAYS}")
-    print(f"Weekly analysis job finished at {datetime.now()}.")
-
-
-# --- Schedule the Jobs ---
-print(f"Scheduling daily data/scoring job to run at {config.SCHEDULE_TIME}...")
+# --- Schedule the Job ---
+print(f"Scheduling daily data/scoring/analysis job to run at {config.SCHEDULE_TIME}...")
 schedule.every().day.at(config.SCHEDULE_TIME).do(daily_job)
-
-# Schedule analysis job (e.g., every Sunday at 8 PM, after daily job)
-analysis_time = (datetime.strptime(config.SCHEDULE_TIME, "%H:%M") + timedelta(hours=1)).strftime("%H:%M")
-print(f"Scheduling weekly analysis job to run every Sunday at {analysis_time}...")
-schedule.every().sunday.at(analysis_time).do(weekly_analysis_job)
 
 
 # --- Run Initial Job Immediately (Optional) ---

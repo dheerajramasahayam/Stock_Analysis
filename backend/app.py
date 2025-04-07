@@ -61,7 +61,8 @@ def get_highlighted_stocks():
                 ds.rsi, -- Add RSI column
                 ds.macd_signal, -- Add MACD signal column
                 ds.bbands_signal, -- Add BBands signal column
-                ds.debt_to_equity -- Add Debt-to-Equity column
+                ds.debt_to_equity, -- Add Debt-to-Equity column
+                ds.pb_ratio -- Add Price-to-Book column
             FROM daily_scores ds
             JOIN companies c ON ds.ticker = c.ticker
             WHERE ds.date = ?

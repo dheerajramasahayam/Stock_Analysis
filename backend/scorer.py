@@ -64,10 +64,11 @@ def calculate_scores_for_date(target_date_str):
         macd_signal_status = 'neutral' # Initialize MACD signal
         bbands_signal_status = 'neutral' # Initialize BBands signal
         debt_to_equity = None # Initialize D/E ratio
+        pb_ratio = None # Initialize P/B ratio
         next_day_open = None # Initialize next day open
         next_day_perf = None # Initialize next day performance %
 
-        # --- Fetch Fundamental Data (P/E, Dividend Yield, D/E) ---
+        # --- Fetch Fundamental Data (P/E, Dividend Yield, D/E, P/B) ---
         try:
             import yfinance as yf
             import time
@@ -97,10 +98,17 @@ def calculate_scores_for_date(target_date_str):
             except (ValueError, TypeError):
                  logger.warning(f"Could not convert Debt-to-Equity '{de_value}' to float for {ticker}.")
                  debt_to_equity = None
+            # Fetch and convert Price-to-Book ratio
+            try:
+                pb_value = stock_info.get('priceToBook')
+                pb_ratio = float(pb_value) if pb_value is not None else None
+            except (ValueError, TypeError):
+                 logger.warning(f"Could not convert Price-to-Book '{pb_value}' to float for {ticker}.")
+                 pb_ratio = None
 
             time.sleep(0.2) # Small delay
         except Exception as e:
-            logger.warning(f"Could not fetch yfinance info for P/E/Div Yield/D/E for {ticker}: {e}")
+            logger.warning(f"Could not fetch yfinance info for fundamentals for {ticker}: {e}")
         # ----------------------------------------------------
 
         # 1. Get Gemini Sentiment Score for the target date
@@ -139,7 +147,6 @@ def calculate_scores_for_date(target_date_str):
             df = df_full.loc[df_full.index <= target_date_str].copy()
         else:
              logger.warning(f"No price history found for {ticker} in range {price_start_date_db_fetch} to {price_end_date_db_fetch}.")
-
 
         # --- Calculate Technical Indicators & Scores (if enough data in df) ---
         if len(df) >= config.PRICE_MOMENTUM_DAYS:
@@ -320,6 +327,15 @@ def calculate_scores_for_date(target_date_str):
         score += de_pts * config.WEIGHT_DE_RATIO
         score_details['debt_equity'] = {'value': debt_to_equity, 'pts': de_pts, 'weighted_pts': de_pts * config.WEIGHT_DE_RATIO}
 
+        # Score Price-to-Book Ratio
+        pb_pts = 0 # Default
+        if pb_ratio is not None:
+             if pb_ratio < config.PB_RATIO_LOW_THRESHOLD and pb_ratio > 0: pb_pts = config.PB_RATIO_LOW_PTS
+             elif pb_ratio > config.PB_RATIO_HIGH_THRESHOLD: pb_pts = config.PB_RATIO_HIGH_PTS
+        score += pb_pts * config.WEIGHT_PB_RATIO
+        score_details['pb_ratio'] = {'value': pb_ratio, 'pts': pb_pts, 'weighted_pts': pb_pts * config.WEIGHT_PB_RATIO}
+
+
         # Log the final score and breakdown
         logger.info(f"Scored {ticker} for {target_date_str}: Final Score={score:.2f}, Breakdown={score_details}")
 
@@ -338,6 +354,7 @@ def calculate_scores_for_date(target_date_str):
             macd_signal_status,
             bbands_signal_status,
             debt_to_equity,
+            pb_ratio, # Store P/B ratio
             next_day_open,
             next_day_perf
         ))
@@ -346,9 +363,9 @@ def calculate_scores_for_date(target_date_str):
     try:
         cursor.executemany("""
             INSERT OR REPLACE INTO daily_scores
-            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity, next_day_open_price, next_day_perf_pct)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, all_scores) # Added next day perf columns
+            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity, pb_ratio, next_day_open_price, next_day_perf_pct)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, all_scores) # Added pb_ratio and next day perf columns
         conn.commit()
         logger.info(f"Successfully calculated and stored scores for {len(all_scores)} tickers.")
     except Exception as e:

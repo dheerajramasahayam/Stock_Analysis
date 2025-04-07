@@ -87,6 +87,12 @@ DE_RATIO_HIGH_THRESHOLD = 1.5 # Above this is potentially risky
 DE_RATIO_LOW_PTS = 1
 DE_RATIO_HIGH_PTS = -1
 
+# Price-to-Book (P/B) Ratio
+PB_RATIO_LOW_THRESHOLD = 1.0 # Below this is good
+PB_RATIO_HIGH_THRESHOLD = 3.0 # Above this might be high (varies by industry)
+PB_RATIO_LOW_PTS = 1
+PB_RATIO_HIGH_PTS = -1
+
 # --- Scoring Weights (Adjust to prioritize factors) ---
 WEIGHT_SENTIMENT = 1.0
 WEIGHT_MOMENTUM = 1.0
@@ -97,7 +103,8 @@ WEIGHT_MA50 = 1.0
 WEIGHT_RSI = 1.0
 WEIGHT_MACD = 1.0
 WEIGHT_BBANDS = 1.0
-WEIGHT_DE_RATIO = 1.0 # Add weight for Debt-to-Equity
+WEIGHT_DE_RATIO = 1.0
+WEIGHT_PB_RATIO = 1.0 # Add weight for Price-to-Book
 
 # --- Portfolio ---
 PORTFOLIO_SELL_SCORE_THRESHOLD = -1 # Suggest selling if score drops below this

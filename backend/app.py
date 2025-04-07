@@ -6,7 +6,7 @@ import database
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, render_template, request
 import logging # Import logging
-from backend.log_setup import setup_logger # Import logger setup
+from log_setup import setup_logger # Import logger setup directly
 import config # Import config for log file path
 
 # --- Logger ---

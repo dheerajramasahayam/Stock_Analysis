@@ -80,6 +80,39 @@ def analyze_performance(days_history=30):
         print(analysis)
         print("------------------------------------")
 
+        # --- Store results in database ---
+        print("Storing analysis results in database...")
+        analysis_run_date = datetime.now().strftime('%Y-%m-%d')
+        rows_to_insert = []
+        # Reset index to access 'score_bucket' as a column
+        analysis_reset = analysis.reset_index()
+
+        for index, row in analysis_reset.iterrows():
+            # Handle potential NaN in avg_next_day_perf
+            avg_perf = row['average_next_day_perf'] if not pd.isna(row['average_next_day_perf']) else None
+            rows_to_insert.append((
+                analysis_run_date,
+                row['score_bucket'],
+                avg_perf,
+                int(row['count']) # Ensure count is integer
+            ))
+
+        if rows_to_insert:
+            try:
+                cursor.executemany("""
+                    INSERT OR REPLACE INTO performance_analysis
+                    (analysis_date, score_bucket, avg_next_day_perf, count)
+                    VALUES (?, ?, ?, ?)
+                """, rows_to_insert)
+                conn.commit()
+                print(f"Successfully stored {len(rows_to_insert)} analysis results.")
+            except Exception as db_e:
+                conn.rollback()
+                print(f"Error storing analysis results: {db_e}")
+        else:
+            print("No analysis results generated to store.")
+        # ---------------------------------
+
     except Exception as e:
         print(f"An error occurred during analysis: {e}")
     finally:

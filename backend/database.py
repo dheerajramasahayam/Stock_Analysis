@@ -101,6 +101,17 @@ def init_db():
         )
     ''')
 
+    # Performance Analysis Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS performance_analysis (
+            analysis_date TEXT NOT NULL, -- Date the analysis was run (YYYY-MM-DD)
+            score_bucket TEXT NOT NULL, -- e.g., "Score >= 4"
+            avg_next_day_perf REAL, -- Average next_day_perf_pct for this bucket
+            count INTEGER NOT NULL, -- Number of data points in this bucket for the analyzed period
+            PRIMARY KEY (analysis_date, score_bucket)
+        )
+    ''')
+
 
     # --- Add gemini_summary column if it doesn't exist ---
     try:

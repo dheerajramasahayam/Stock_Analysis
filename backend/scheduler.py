@@ -14,9 +14,9 @@ logger = setup_logger('scheduler', config.LOG_FILE_SCHEDULER)
 
 # --- Configuration ---
 PYTHON_EXECUTABLE = "/usr/bin/python3" # Use the system python used for user install
-DATA_FETCHER_SCRIPT = "backend/data_fetcher.py"
-SCORER_SCRIPT = "backend/scorer.py"
-ANALYSIS_SCRIPT = "backend/analysis.py"
+DATA_FETCHER_SCRIPT = "data_fetcher.py" # Just the filename
+SCORER_SCRIPT = "scorer.py" # Just the filename
+ANALYSIS_SCRIPT = "analysis.py" # Just the filename
 ANALYSIS_HISTORY_DAYS = 90 # Analyze last 90 days of performance
 # SCHEDULE_TIME = "19:00" # Use from config
 # --------------------

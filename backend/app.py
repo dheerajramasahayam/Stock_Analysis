@@ -8,6 +8,7 @@ from flask import Flask, jsonify, render_template, request
 import logging # Import logging
 from log_setup import setup_logger # Import logger setup directly
 import config # Import config for log file path
+import numpy as np # Import numpy
 
 # --- Logger ---
 # Note: Gunicorn has its own logging, but we can add Flask-specific logs too.
@@ -64,7 +65,8 @@ def get_highlighted_stocks():
                 ds.debt_to_equity,
                 ds.pb_ratio,
                 ds.ps_ratio,
-                ds.price_vs_ma200
+                ds.price_vs_ma200,
+                ds.atr_value -- Add ATR value column
             FROM daily_scores ds
             JOIN companies c ON ds.ticker = c.ticker
             WHERE ds.date = ?

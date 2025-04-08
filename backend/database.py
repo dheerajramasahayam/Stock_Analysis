@@ -84,6 +84,7 @@ def init_db():
             pb_ratio REAL, -- Add Price-to-Book ratio
             ps_ratio REAL, -- Add Price-to-Sales ratio
             price_vs_ma200 TEXT, -- Add MA200 comparison ('above', 'below', 'N/A')
+            atr_value REAL, -- Add ATR value
             PRIMARY KEY (ticker, date),
             FOREIGN KEY (ticker) REFERENCES companies (ticker)
         )
@@ -264,6 +265,14 @@ def init_db():
             print("price_vs_ma200 column already exists.")
         else: raise e
 
+    # --- Add atr_value column if it doesn't exist ---
+    try:
+        cursor.execute("ALTER TABLE daily_scores ADD COLUMN atr_value REAL")
+        print("Added atr_value column to daily_scores table.")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            print("atr_value column already exists.")
+        else: raise e
 
     conn.commit()
     conn.close()

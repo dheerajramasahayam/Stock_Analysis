@@ -42,6 +42,7 @@ def calculate_scores_for_date(target_date_str):
 
     target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
     # Fetch a larger window from DB for calculations (MA200 needs ~250 calendar days)
+    # Also need High/Low for ATR
     price_start_date_db_fetch = (target_date - timedelta(days=250)).strftime('%Y-%m-%d')
     price_end_date_db_fetch = (target_date + timedelta(days=4)).strftime('%Y-%m-%d') # Look a few days ahead for next_day_open
 
@@ -64,6 +65,7 @@ def calculate_scores_for_date(target_date_str):
         debt_to_equity = None # Initialize D/E ratio
         pb_ratio = None # Initialize P/B ratio
         ps_ratio = None # Initialize P/S ratio
+        atr_value = None # Initialize ATR value
         next_day_open = None # Initialize next day open
         next_day_perf = None # Initialize next day performance %
 
@@ -133,9 +135,9 @@ def calculate_scores_for_date(target_date_str):
         score += sentiment_pts * config.WEIGHT_SENTIMENT
         score_details['sentiment'] = {'value': gemini_sentiment, 'pts': sentiment_pts, 'weighted_pts': sentiment_pts * config.WEIGHT_SENTIMENT}
 
-        # 2. Fetch Price History
+        # 2. Fetch Price History (including OHLC for ATR)
         cursor.execute("""
-            SELECT date, open_price, close_price, volume
+            SELECT date, open_price, high_price, low_price, close_price, volume
             FROM price_history
             WHERE ticker = ? AND date >= ? AND date <= ?
             ORDER BY date ASC
@@ -146,20 +148,29 @@ def calculate_scores_for_date(target_date_str):
         df = pd.DataFrame()      # Initialize empty
 
         if price_rows:
-            df_full = pd.DataFrame(price_rows, columns=['date', 'open_price', 'close_price', 'volume'])
-            df_full['date'] = pd.to_datetime(df_full['date'])
-            df_full = df_full.set_index('date')
-            # Filter DataFrame to data up to the target_date for scoring
-            df = df_full.loc[df_full.index <= target_date_str].copy()
+            # Ensure all necessary columns are present before creating DataFrame
+            required_cols = ['date', 'open_price', 'high_price', 'low_price', 'close_price', 'volume']
+            # Check if the first row has all columns (assuming consistency)
+            if all(col in price_rows[0].keys() for col in required_cols):
+                df_full = pd.DataFrame(price_rows, columns=required_cols) # Use actual column names
+                df_full['date'] = pd.to_datetime(df_full['date'])
+                df_full = df_full.set_index('date')
+                # Filter DataFrame to data up to the target_date for scoring
+                df = df_full.loc[df_full.index <= target_date_str].copy()
+                # Rename columns for pandas_ta compatibility if needed (it usually expects 'open', 'high', 'low', 'close')
+                df.rename(columns={'open_price': 'open', 'high_price': 'high', 'low_price': 'low', 'close_price': 'close'}, inplace=True)
+            else:
+                logger.error(f"Database price_history for {ticker} is missing required columns (Open, High, Low, Close, Volume). Cannot calculate technical indicators.")
         else:
              logger.warning(f"No price history found for {ticker} in range {price_start_date_db_fetch} to {price_end_date_db_fetch}.")
 
+
         # --- Calculate Technical Indicators & Scores (if enough data in df) ---
-        if len(df) >= config.PRICE_MOMENTUM_DAYS:
+        if not df.empty and len(df) >= config.PRICE_MOMENTUM_DAYS:
             # Price Momentum
             if len(df) >= config.PRICE_MOMENTUM_DAYS:
-                price_end = df['close_price'].iloc[-1]
-                price_start = df['close_price'].iloc[-1 - config.PRICE_MOMENTUM_DAYS]
+                price_end = df['close'].iloc[-1]
+                price_start = df['close'].iloc[-1 - config.PRICE_MOMENTUM_DAYS]
                 momentum_pts = config.PRICE_NEUTRAL_PTS # Default
                 if price_start != 0:
                     price_change_pct = ((price_end - price_start) / price_start) * 100
@@ -190,8 +201,8 @@ def calculate_scores_for_date(target_date_str):
             # 50-day SMA
             ma_pts = 0
             if len(df) >= config.MA_PERIOD:
-                df['SMA_50'] = df['close_price'].rolling(window=config.MA_PERIOD).mean()
-                latest_price = df['close_price'].iloc[-1]
+                df['SMA_50'] = df['close'].rolling(window=config.MA_PERIOD).mean()
+                latest_price = df['close'].iloc[-1]
                 latest_sma = df['SMA_50'].iloc[-1]
                 if not pd.isna(latest_sma):
                     if latest_price > latest_sma:
@@ -214,8 +225,8 @@ def calculate_scores_for_date(target_date_str):
             ma200_pts = 0
             ma200_period = 200 # Define the period
             if len(df) >= ma200_period:
-                df['SMA_200'] = df['close_price'].rolling(window=ma200_period).mean()
-                latest_price = df['close_price'].iloc[-1]
+                df['SMA_200'] = df['close'].rolling(window=ma200_period).mean()
+                latest_price = df['close'].iloc[-1]
                 latest_sma200 = df['SMA_200'].iloc[-1]
                 if not pd.isna(latest_sma200):
                     if latest_price > latest_sma200:
@@ -298,11 +309,11 @@ def calculate_scores_for_date(target_date_str):
                 lower_band_col = f'BBL_{config.BBANDS_PERIOD}_{config.BBANDS_STDDEV}'
                 upper_band_col = f'BBU_{config.BBANDS_PERIOD}_{config.BBANDS_STDDEV}'
                 if lower_band_col in df.columns and upper_band_col in df.columns and \
-                   not pd.isna(df['close_price'].iloc[-1]) and not pd.isna(df[lower_band_col].iloc[-1]) and \
-                   not pd.isna(df['close_price'].iloc[-2]) and not pd.isna(df[lower_band_col].iloc[-2]) and \
+                   not pd.isna(df['close'].iloc[-1]) and not pd.isna(df[lower_band_col].iloc[-1]) and \
+                   not pd.isna(df['close'].iloc[-2]) and not pd.isna(df[lower_band_col].iloc[-2]) and \
                    not pd.isna(df[upper_band_col].iloc[-1]) and not pd.isna(df[upper_band_col].iloc[-2]):
-                    price_now, lower_now, upper_now = df['close_price'].iloc[-1], df[lower_band_col].iloc[-1], df[upper_band_col].iloc[-1]
-                    price_prev, lower_prev, upper_prev = df['close_price'].iloc[-2], df[lower_band_col].iloc[-2], df[upper_band_col].iloc[-2]
+                    price_now, lower_now, upper_now = df['close'].iloc[-1], df[lower_band_col].iloc[-1], df[upper_band_col].iloc[-1]
+                    price_prev, lower_prev, upper_prev = df['close'].iloc[-2], df[lower_band_col].iloc[-2], df[upper_band_col].iloc[-2]
                     if price_prev > lower_prev and price_now < lower_now:
                         bbands_pts = config.BBANDS_LOWER_CROSS_PTS
                         bbands_signal_status = 'cross_lower'
@@ -318,11 +329,35 @@ def calculate_scores_for_date(target_date_str):
                 bbands_signal_status = 'N/A'
             score_details['bbands'] = {'value': bbands_signal_status, 'pts': bbands_pts, 'weighted_pts': bbands_pts * config.WEIGHT_BBANDS}
 
+            # ATR (Average True Range)
+            atr_pts = 0
+            if len(df) >= config.ATR_PERIOD + 1: # Need enough data for ATR
+                # pandas_ta needs high, low, close columns
+                df.ta.atr(length=config.ATR_PERIOD, append=True)
+                atr_col_name = f'ATRr_{config.ATR_PERIOD}' # pandas_ta appends 'r' for range
+                if atr_col_name in df.columns and not pd.isna(df[atr_col_name].iloc[-1]):
+                    atr_value = df[atr_col_name].iloc[-1]
+                    # Score ATR based on thresholds
+                    if atr_value < config.ATR_LOW_THRESHOLD:
+                        atr_pts = config.ATR_LOW_PTS
+                    elif atr_value > config.ATR_HIGH_THRESHOLD:
+                        atr_pts = config.ATR_HIGH_PTS
+                    # else: neutral
+                    score += atr_pts * config.WEIGHT_ATR # Apply weight
+                else:
+                    logger.warning(f"ATR calculation failed or resulted in NaN for {ticker}.")
+                    atr_value = None
+            else:
+                logger.warning(f"Not enough data ({len(df)} days) for ATR calculation for {ticker}.")
+                atr_value = None
+            score_details['atr'] = {'value': atr_value, 'pts': atr_pts, 'weighted_pts': atr_pts * config.WEIGHT_ATR}
+
+
             # Calculate Next Day Performance (Close[D] -> Open[D+1])
             next_day_data = df_full.loc[df_full.index > target_date_str]
             if not next_day_data.empty:
                 next_day_open = next_day_data['open_price'].iloc[0]
-                current_close = df['close_price'].iloc[-1]
+                current_close = df['close'].iloc[-1] # Use renamed column
                 if current_close and next_day_open and current_close > 0:
                     next_day_perf = ((next_day_open - current_close) / current_close) * 100
                 else:
@@ -336,14 +371,15 @@ def calculate_scores_for_date(target_date_str):
             score_details['momentum'] = {'value': None, 'pts': config.PRICE_NEUTRAL_PTS, 'weighted_pts': config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM}
             score_details['volume'] = {'value': None, 'pts': config.VOLUME_NORMAL_PTS, 'weighted_pts': config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME}
             score_details['ma50'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
-            score_details['ma200'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0} # Add MA200 neutral
+            score_details['ma200'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
             score_details['rsi'] = {'value': None, 'pts': 0, 'weighted_pts': 0}
             score_details['macd'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
             score_details['bbands'] = {'value': 'N/A', 'pts': 0, 'weighted_pts': 0}
+            score_details['atr'] = {'value': None, 'pts': 0, 'weighted_pts': 0} # Add ATR neutral
             score += config.PRICE_NEUTRAL_PTS * config.WEIGHT_MOMENTUM
             score += config.VOLUME_NORMAL_PTS * config.WEIGHT_VOLUME
             price_vs_ma50_status = 'N/A'
-            price_vs_ma200_status = 'N/A' # Ensure status is N/A
+            price_vs_ma200_status = 'N/A'
             macd_signal_status = 'N/A'
             bbands_signal_status = 'N/A'
 
@@ -407,7 +443,8 @@ def calculate_scores_for_date(target_date_str):
             debt_to_equity,
             pb_ratio,
             ps_ratio,
-            price_vs_ma200_status, # Store MA200 status
+            price_vs_ma200_status,
+            atr_value, # Store ATR value
             next_day_open,
             next_day_perf
         ))
@@ -416,9 +453,9 @@ def calculate_scores_for_date(target_date_str):
     try:
         cursor.executemany("""
             INSERT OR REPLACE INTO daily_scores
-            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity, pb_ratio, ps_ratio, price_vs_ma200, next_day_open_price, next_day_perf_pct)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, all_scores) # Added price_vs_ma200 and next day perf columns
+            (ticker, date, score, price_change_pct, volume_ratio, avg_sentiment, pe_ratio, dividend_yield, price_vs_ma50, rsi, macd_signal, bbands_signal, debt_to_equity, pb_ratio, ps_ratio, price_vs_ma200, atr_value, next_day_open_price, next_day_perf_pct)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, all_scores) # Added atr_value and next day perf columns
         conn.commit()
         logger.info(f"Successfully calculated and stored scores for {len(all_scores)} tickers.")
     except Exception as e:

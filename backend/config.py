@@ -120,6 +120,16 @@ PS_RATIO_HIGH_PTS = -1
 MA200_PRICE_ABOVE_PTS = 1
 MA200_PRICE_BELOW_PTS = -1
 
+# Average True Range (ATR) - 14 day default
+ATR_PERIOD = 14
+# Thresholds might need tuning based on typical ATR values for the index/price range
+# Example: Score positively if ATR is below 5% of price, negatively if above 15%?
+# Let's use simpler absolute thresholds for now, assuming prices around $1-$50
+ATR_LOW_THRESHOLD = 0.5  # Below this = low volatility
+ATR_HIGH_THRESHOLD = 2.0 # Above this = high volatility
+ATR_LOW_PTS = 1
+ATR_HIGH_PTS = -1
+
 # --- Scoring Weights (Adjust to prioritize factors) ---
 WEIGHT_SENTIMENT = 1.0
 WEIGHT_MOMENTUM = 1.0
@@ -133,7 +143,8 @@ WEIGHT_BBANDS = 1.0
 WEIGHT_DE_RATIO = 1.0
 WEIGHT_PB_RATIO = 1.0
 WEIGHT_PS_RATIO = 1.0
-WEIGHT_MA200 = 1.0 # Add weight for MA200 comparison
+WEIGHT_MA200 = 1.0
+WEIGHT_ATR = 1.0 # Add weight for ATR
 
 # --- Portfolio ---
 PORTFOLIO_SELL_SCORE_THRESHOLD = -1 # Suggest selling if score drops below this

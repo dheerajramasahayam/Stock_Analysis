@@ -243,8 +243,18 @@ def calculate_scores_for_date(target_date_str):
                 rsi_col_name = f'RSI_{config.RSI_PERIOD}'
                 if rsi_col_name in df.columns and not pd.isna(df[rsi_col_name].iloc[-1]):
                     rsi_value = df[rsi_col_name].iloc[-1]
-                    if rsi_value < config.RSI_OVERSOLD_THRESHOLD: rsi_pts = config.RSI_OVERSOLD_PTS
-                    elif rsi_value > config.RSI_OVERBOUGHT_THRESHOLD: rsi_pts = config.RSI_OVERBOUGHT_PTS
+                    # Apply graded points
+                    if rsi_value < config.RSI_VERY_OVERSOLD_THRESHOLD:
+                        rsi_pts = config.RSI_VERY_OVERSOLD_PTS
+                    elif rsi_value < config.RSI_OVERSOLD_THRESHOLD:
+                        rsi_pts = config.RSI_OVERSOLD_PTS
+                    elif rsi_value > config.RSI_VERY_OVERBOUGHT_THRESHOLD:
+                         rsi_pts = config.RSI_VERY_OVERBOUGHT_PTS
+                    elif rsi_value > config.RSI_OVERBOUGHT_THRESHOLD:
+                        rsi_pts = config.RSI_OVERBOUGHT_PTS
+                    else: # Neutral zone
+                        rsi_pts = config.RSI_NEUTRAL_PTS
+
                     score += rsi_pts * config.WEIGHT_RSI
                 else:
                     logger.warning(f"RSI calculation failed or resulted in NaN for {ticker}.")

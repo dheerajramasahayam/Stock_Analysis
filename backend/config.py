@@ -71,12 +71,19 @@ MA_PERIOD = 50
 MA_PRICE_ABOVE_PTS = 1
 MA_PRICE_BELOW_PTS = -1
 
-# RSI (Relative Strength Index)
+# RSI (Relative Strength Index) - Graded Points
 RSI_PERIOD = 14
-RSI_OVERSOLD_THRESHOLD = 30 # Below this is considered oversold (potential buy signal)
-RSI_OVERBOUGHT_THRESHOLD = 70 # Above this is considered overbought (potential sell signal)
+RSI_VERY_OVERSOLD_THRESHOLD = 20 # Below this is very oversold
+RSI_OVERSOLD_THRESHOLD = 30      # Below this is oversold
+RSI_OVERBOUGHT_THRESHOLD = 70    # Above this is overbought
+RSI_VERY_OVERBOUGHT_THRESHOLD = 80 # Above this is very overbought
+
+RSI_VERY_OVERSOLD_PTS = 2
 RSI_OVERSOLD_PTS = 1
+RSI_NEUTRAL_PTS = 0
 RSI_OVERBOUGHT_PTS = -1
+RSI_VERY_OVERBOUGHT_PTS = -2
+
 
 # MACD (Moving Average Convergence Divergence)
 MACD_FAST = 12

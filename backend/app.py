@@ -277,6 +277,7 @@ import subprocess
 import config # Re-import for log paths
 import re
 import numpy as np # Import numpy
+import sys # Import sys to get current executable path
 
 def get_last_log_entry_info(log_file_path):
     """Helper to get timestamp and status from the last relevant log entry."""
@@ -414,7 +415,9 @@ def run_job_manually(job_name):
 
     # Construct the full path to the script within the backend directory
     script_path = os.path.join(config.PROJECT_ROOT, "backend", script_map[job_name])
-    command = [config.PYTHON_EXECUTABLE, script_path]
+    # Use the currently running python executable
+    python_executable = sys.executable
+    command = [python_executable, script_path]
 
     # Add date argument for scorer if needed (defaults to yesterday in script)
     if job_name == 'scorer':
@@ -428,7 +431,7 @@ def run_job_manually(job_name):
         # Run the script in the background using Popen
         # The working directory should be the project root for consistency
         project_root_dir = config.PROJECT_ROOT
-        logger.info(f"Executing command: {' '.join(command)} in directory: {project_root_dir}")
+        logger.info(f"Executing command: {' '.join(command)} with executable {python_executable} in directory: {project_root_dir}")
         process = subprocess.Popen(command, cwd=project_root_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
         # We don't wait for completion here, just trigger it
         logger.info(f"Successfully triggered job '{job_name}' with PID {process.pid}")

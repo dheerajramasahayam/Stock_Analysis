@@ -1,12 +1,22 @@
 import os
 from dotenv import load_dotenv
 
-# Load .env file from project root (one level up from this config file's directory)
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+# Define PROJECT_ROOT based on this file's location BEFORE loading .env
+# Assumes config.py is in backend/
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Load .env file from project root
+dotenv_path = os.path.join(PROJECT_ROOT, '.env')
 if os.path.exists(dotenv_path):
     load_dotenv(dotenv_path=dotenv_path)
 else:
-    print("Warning: .env file not found at expected location:", dotenv_path)
+    # Try loading from one level up if running script directly from backend? Less ideal.
+    dotenv_path_alt = os.path.join(os.path.dirname(__file__), '..', '.env')
+    if os.path.exists(dotenv_path_alt):
+         load_dotenv(dotenv_path=dotenv_path_alt)
+         print(f"Warning: Loaded .env from {dotenv_path_alt}")
+    else:
+        print(f"Warning: .env file not found at expected location: {dotenv_path}")
 
 
 # Configuration settings for the Stock Analyzer application
@@ -19,7 +29,6 @@ GEMINI_MODEL_NAME = os.getenv('GEMINI_MODEL_NAME', 'gemini-1.5-flash-latest') # 
 
 # --- Data Fetching ---
 # Use absolute path based on project root
-PROJECT_ROOT = os.path.dirname(dotenv_path) # dotenv_path is root/.env
 TICKER_LIST_FILE = os.path.join(PROJECT_ROOT, "backend", "sp600_tickers.txt") # Original
 # TICKER_LIST_FILE = os.path.join(PROJECT_ROOT, "backend", "sp600_tickers_test.txt") # Using test file
 MIN_PRICE_FILTER = 1.00 # Exclude stocks below $1.00
@@ -124,6 +133,7 @@ PORTFOLIO_SELL_SCORE_THRESHOLD = -1 # Suggest selling if score drops below this
 
 # --- Scheduling ---
 SCHEDULE_TIME = "19:00" # Time to run daily (e.g., 7:00 PM)
+ANALYSIS_HISTORY_DAYS = 90 # Default days for performance analysis
 
 # --- API Endpoints ---
 BRAVE_SEARCH_ENDPOINT = 'https://api.search.brave.com/res/v1/web/search' # Using WEB Search endpoint

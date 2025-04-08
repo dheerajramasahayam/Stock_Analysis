@@ -39,11 +39,11 @@ def get_highlighted_stocks():
         cursor.execute("SELECT MAX(date) FROM daily_scores")
         latest_date_row = cursor.fetchone()
         if not latest_date_row or not latest_date_row[0]:
-            print("No scores found in the database.")
+            logger.warning("No scores found in the database for /api/highlighted-stocks")
             return jsonify([]) # Return empty list if no scores yet
 
         latest_date = latest_date_row[0]
-        print(f"Fetching highlighted stocks for date: {latest_date}")
+        logger.info(f"Fetching highlighted stocks for date: {latest_date}")
 
         # Fetch scores and company info for the latest date
         cursor.execute("""
@@ -57,14 +57,14 @@ def get_highlighted_stocks():
                 ds.avg_sentiment,
                 ds.pe_ratio,
                 ds.dividend_yield,
-                ds.price_vs_ma50, -- Add MA status column
-                ds.rsi, -- Add RSI column
-                ds.macd_signal, -- Add MACD signal column
-                ds.bbands_signal, -- Add BBands signal column
-                ds.debt_to_equity, -- Add Debt-to-Equity column
-                ds.pb_ratio, -- Add Price-to-Book column
-                ds.ps_ratio, -- Add Price-to-Sales column
-                ds.price_vs_ma200 -- Add MA200 comparison column
+                ds.price_vs_ma50,
+                ds.rsi,
+                ds.macd_signal,
+                ds.bbands_signal,
+                ds.debt_to_equity,
+                ds.pb_ratio,
+                ds.ps_ratio,
+                ds.price_vs_ma200
             FROM daily_scores ds
             JOIN companies c ON ds.ticker = c.ticker
             WHERE ds.date = ?
@@ -77,7 +77,7 @@ def get_highlighted_stocks():
             stock_dict = dict(row)
             for key, value in stock_dict.items():
                 # Replace float('inf'), float('-inf'), float('nan') with None
-                if isinstance(value, float) and (value == float('inf') or value == float('-inf') or value != value): # Check for NaN
+                if isinstance(value, float) and not np.isfinite(value): # Check for Inf/NaN using numpy
                     stock_dict[key] = None
             stocks_data.append(stock_dict)
 
@@ -268,20 +268,21 @@ def delete_portfolio_holding(holding_id):
 
 if __name__ == '__main__':
     # Note: Use 'flask run' in development, or a proper WSGI server in production
-    app.run(debug=True)
+    # Use 0.0.0.0 to make accessible on local network
+    app.run(host='0.0.0.0', debug=True)
 
 
 # --- Admin Interface Endpoints ---
 import subprocess
 import config # Re-import for log paths
 import re
+import numpy as np # Import numpy
 
 def get_last_log_entry_info(log_file_path):
     """Helper to get timestamp and status from the last relevant log entry."""
     try:
-        # Use absolute path
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        absolute_log_path = os.path.join(project_root, log_file_path)
+        # Use absolute path derived from config.PROJECT_ROOT
+        absolute_log_path = os.path.join(config.PROJECT_ROOT, log_file_path)
 
         if not os.path.exists(absolute_log_path):
             return None, "Log file not found"
@@ -298,15 +299,18 @@ def get_last_log_entry_info(log_file_path):
             timestamp_match = re.match(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})', line)
             if timestamp_match:
                 current_timestamp = timestamp_match.group(1)
+                # Check for start markers
                 if "=== Starting" in line or "--- Running script" in line:
                     if last_timestamp is None: # Only update if we haven't found a finish/error yet
                        last_status = "Running/Incomplete"
                        last_timestamp = current_timestamp
-                elif "successfully at" in line or "=== Finished" in line:
+                # Check for success markers
+                elif "successfully at" in line or "=== Finished" in line or "successfully stored" in line:
                     last_status = "Success"
                     last_timestamp = current_timestamp
                     break # Found the latest completion status
-                elif "failed with return code" in line or "!!! An unexpected error occurred" in line:
+                # Check for failure markers
+                elif "failed with return code" in line or "!!! An unexpected error occurred" in line or "Error:" in line:
                     last_status = "Failed"
                     last_timestamp = current_timestamp
                     break # Found the latest completion status
@@ -373,12 +377,11 @@ def get_logs(log_type):
         lines = 100
 
     try:
-        # Use absolute path
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        absolute_log_path = os.path.join(project_root, log_file_path)
+        # Use absolute path derived from config.PROJECT_ROOT
+        absolute_log_path = os.path.join(config.PROJECT_ROOT, log_file_path)
 
         if not os.path.exists(absolute_log_path):
-            return jsonify({"log_content": f"Log file not found: {log_file_path}"}), 404
+            return jsonify({"log_content": f"Log file not found: {absolute_log_path}"}), 404
 
         # Use tail command for efficiency
         process = subprocess.run(['tail', '-n', str(lines), absolute_log_path], capture_output=True, text=True, check=True)
@@ -386,10 +389,10 @@ def get_logs(log_type):
         return jsonify({"log_content": log_content})
 
     except subprocess.CalledProcessError as e:
-         logger.error(f"Error running tail command for {log_file_path}: {e}")
+         logger.error(f"Error running tail command for {absolute_log_path}: {e}")
          return jsonify({"error": f"Failed to read log file using tail: {e.stderr}"}), 500
     except Exception as e:
-        logger.exception(f"Error reading log file {log_file_path}: {e}")
+        logger.exception(f"Error reading log file {absolute_log_path}: {e}")
         return jsonify({"error": "Failed to read log file"}), 500
 
 
@@ -398,18 +401,20 @@ def run_job_manually(job_name):
     """API endpoint to manually trigger a backend script."""
     logger.info(f"Received manual trigger request for job: {job_name}")
 
+    # Map job name to the SCRIPT FILENAME (relative to backend dir)
     script_map = {
-        "fetcher": config.DATA_FETCHER_SCRIPT,
-        "scorer": config.SCORER_SCRIPT,
-        "analysis": config.ANALYSIS_SCRIPT,
+        "fetcher": "data_fetcher.py",
+        "scorer": "scorer.py",
+        "analysis": "analysis.py",
     }
 
     if job_name not in script_map:
         logger.warning(f"Invalid job name requested: {job_name}")
         return jsonify({"error": "Invalid job name"}), 400
 
-    script_to_run = script_map[job_name]
-    command = [config.PYTHON_EXECUTABLE, script_to_run]
+    # Construct the full path to the script within the backend directory
+    script_path = os.path.join(config.PROJECT_ROOT, "backend", script_map[job_name])
+    command = [config.PYTHON_EXECUTABLE, script_path]
 
     # Add date argument for scorer if needed (defaults to yesterday in script)
     if job_name == 'scorer':
@@ -420,14 +425,14 @@ def run_job_manually(job_name):
         command.append(str(config.ANALYSIS_HISTORY_DAYS))
 
     try:
-        # Run the script in the background using Popen so the API call returns quickly
-        # Run from the project root directory
-        project_root = os.path.dirname(config.PROJECT_ROOT) # Get parent of backend dir
-        logger.info(f"Executing command: {' '.join(command)} in directory: {project_root}")
-        process = subprocess.Popen(command, cwd=project_root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # Run the script in the background using Popen
+        # The working directory should be the project root for consistency
+        project_root_dir = config.PROJECT_ROOT
+        logger.info(f"Executing command: {' '.join(command)} in directory: {project_root_dir}")
+        process = subprocess.Popen(command, cwd=project_root_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
         # We don't wait for completion here, just trigger it
         logger.info(f"Successfully triggered job '{job_name}' with PID {process.pid}")
-        return jsonify({"message": f"Job '{job_name}' triggered successfully. Check logs for progress."}), 202 # 202 Accepted
+        return jsonify({"message": f"Job '{job_name}' triggered successfully. Check logs ({script_map[job_name].replace('.py', '.log')}) for progress."}), 202 # 202 Accepted
     except Exception as e:
         logger.exception(f"Failed to trigger job '{job_name}': {e}")
         return jsonify({"error": f"Failed to trigger job '{job_name}'"}), 500

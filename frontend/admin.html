@@ -41,6 +41,14 @@
         <div id="status-content">Loading status...</div>
     </section>
 
+    <section id="manual-jobs">
+        <h2>Manual Job Triggers</h2>
+        <button id="run-fetcher">Run Data Fetcher</button>
+        <button id="run-scorer">Run Scorer (Yesterday)</button>
+        <button id="run-analysis">Run Analysis</button>
+        <p id="job-trigger-message" class="message"></p>
+    </section>
+
     <section id="logs">
         <h2>View Logs</h2>
         <label for="log-file-select">Select Log File:</label>
@@ -65,6 +73,10 @@
             const logLinesInput = document.getElementById('log-lines');
             const viewLogBtn = document.getElementById('view-log');
             const logOutputPre = document.getElementById('log-output');
+            const runFetcherBtn = document.getElementById('run-fetcher');
+            const runScorerBtn = document.getElementById('run-scorer');
+            const runAnalysisBtn = document.getElementById('run-analysis');
+            const jobTriggerMsg = document.getElementById('job-trigger-message');
 
             async function fetchStatus() {
                 statusContent.textContent = 'Loading status...';
@@ -125,7 +137,32 @@
             refreshStatusBtn.addEventListener('click', fetchStatus);
             viewLogBtn.addEventListener('click', fetchLogs);
 
-            // Initial load
+            // --- Manual Job Trigger Logic ---
+            async function triggerJob(jobName) {
+                jobTriggerMsg.textContent = `Triggering ${jobName}...`;
+                jobTriggerMsg.className = 'message info'; // Use a class for styling maybe
+                try {
+                    const response = await fetch(`/api/admin/run-job/${jobName}`, { method: 'POST' });
+                    const result = await response.json();
+                    if (!response.ok) {
+                        throw new Error(result.error || `HTTP error! Status: ${response.status}`);
+                    }
+                    jobTriggerMsg.textContent = result.message || `${jobName} triggered successfully. Check logs for progress.`;
+                    jobTriggerMsg.className = 'message success';
+                    // Optionally refresh status after a delay
+                    setTimeout(fetchStatus, 5000);
+                } catch (error) {
+                    console.error(`Error triggering ${jobName}:`, error);
+                    jobTriggerMsg.textContent = `Error triggering ${jobName}: ${error.message}`;
+                    jobTriggerMsg.className = 'message error';
+                }
+            }
+
+            runFetcherBtn.addEventListener('click', () => triggerJob('fetcher'));
+            runScorerBtn.addEventListener('click', () => triggerJob('scorer'));
+            runAnalysisBtn.addEventListener('click', () => triggerJob('analysis'));
+
+            // --- Initial Load ---
             fetchStatus();
         });
     </script>

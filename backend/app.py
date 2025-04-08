@@ -391,3 +391,43 @@ def get_logs(log_type):
     except Exception as e:
         logger.exception(f"Error reading log file {log_file_path}: {e}")
         return jsonify({"error": "Failed to read log file"}), 500
+
+
+@app.route('/api/admin/run-job/<job_name>', methods=['POST'])
+def run_job_manually(job_name):
+    """API endpoint to manually trigger a backend script."""
+    logger.info(f"Received manual trigger request for job: {job_name}")
+
+    script_map = {
+        "fetcher": config.DATA_FETCHER_SCRIPT,
+        "scorer": config.SCORER_SCRIPT,
+        "analysis": config.ANALYSIS_SCRIPT,
+    }
+
+    if job_name not in script_map:
+        logger.warning(f"Invalid job name requested: {job_name}")
+        return jsonify({"error": "Invalid job name"}), 400
+
+    script_to_run = script_map[job_name]
+    command = [config.PYTHON_EXECUTABLE, script_to_run]
+
+    # Add date argument for scorer if needed (defaults to yesterday in script)
+    if job_name == 'scorer':
+         # score_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+         # command.append(score_date) # Keep default behavior for manual run
+         pass # Scorer defaults to yesterday if no arg
+    elif job_name == 'analysis':
+        command.append(str(config.ANALYSIS_HISTORY_DAYS))
+
+    try:
+        # Run the script in the background using Popen so the API call returns quickly
+        # Run from the project root directory
+        project_root = os.path.dirname(config.PROJECT_ROOT) # Get parent of backend dir
+        logger.info(f"Executing command: {' '.join(command)} in directory: {project_root}")
+        process = subprocess.Popen(command, cwd=project_root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # We don't wait for completion here, just trigger it
+        logger.info(f"Successfully triggered job '{job_name}' with PID {process.pid}")
+        return jsonify({"message": f"Job '{job_name}' triggered successfully. Check logs for progress."}), 202 # 202 Accepted
+    except Exception as e:
+        logger.exception(f"Failed to trigger job '{job_name}': {e}")
+        return jsonify({"error": f"Failed to trigger job '{job_name}'"}), 500
